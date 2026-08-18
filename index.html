@@ -127,6 +127,29 @@ main{padding:2px 16px calc(var(--nav-h) + 34px) 16px}
 .chip:active{transform:scale(.95)}
 .chip svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;display:inline-block;vertical-align:-2px;margin-right:2px}
 
+/* categorie */
+.catchip{display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border-radius:99px;background:var(--surface);
+  border:1px solid var(--line);box-shadow:var(--sh);font-size:13px;font-weight:600;color:var(--txt2);white-space:nowrap;flex:none;transition:.16s var(--ease)}
+.catchip i{width:9px;height:9px;border-radius:50%;background:var(--cc,var(--txt3));flex:none}
+.catchip.on{color:#fff;background:var(--cc,var(--txt2));border-color:var(--cc,var(--txt2))}
+.catchip.on i{background:#fff}
+.catchip:active{transform:scale(.95)}
+.catchip.sm{padding:6px 11px;font-size:12.5px}
+.catchip.mng{padding:8px 11px;color:var(--txt3)}
+.catmng{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:6px 14px;box-shadow:var(--sh);margin:2px 0 6px}
+.cmrow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--line)}
+.cmrow:last-child{border-bottom:none}
+.cmdot{width:11px;height:11px;border-radius:50%;background:var(--cc);flex:none}
+.cminput{flex:1;min-width:110px;border:none;background:none;outline:none;font-weight:700;font-size:14px}
+.cmdel{color:var(--txt3);width:30px;height:30px;display:grid;place-items:center;flex:none}
+.cmdel svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2}
+.cmsubs{display:flex;flex-wrap:wrap;gap:6px;width:100%;padding-left:20px}
+.cmsub{display:inline-flex;align-items:center;gap:3px;background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:3px 4px 3px 9px;font-size:12px;font-weight:600;color:var(--txt2)}
+.cmsub button{color:var(--txt3);width:18px;height:18px;display:grid;place-items:center}
+.cmsub button svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.6}
+.cmsub.add{padding:3px 8px}
+.cmsub.add input{border:none;background:none;outline:none;width:80px;font-size:12px;font-weight:600}
+
 /* ---------- Search ---------- */
 .search{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);
   border-radius:var(--r);padding:11px 14px;box-shadow:var(--sh)}
@@ -425,6 +448,26 @@ function findContact(name){
 }
 const telHref = p => 'tel:'+String(p||'').replace(/[^\d+*#]/g,'');
 
+/* ---- Categorie + sottocategorie ---- */
+const CATKEY='tempo_cats_v1';
+const CATPAL=['#ff5a3c','#4c6ef5','#1aa568','#f0a01e','#9b5de5','#e5484d','#0ea5e9','#e8590c'];
+let cats = loadCats();
+function loadCats(){
+  try{ const v=JSON.parse(localStorage.getItem(CATKEY)); if(Array.isArray(v)) return v; }catch(e){}
+  return [
+    {id:'casa',name:'Casa',color:'#1aa568',subs:[]},
+    {id:'lavoro',name:'Lavoro',color:'#4c6ef5',subs:[]},
+    {id:'personale',name:'Personale',color:'#9b5de5',subs:[]},
+  ];
+}
+function saveCats(){ localStorage.setItem(CATKEY, JSON.stringify(cats)); }
+function getCat(id){ return cats.find(c=>c.id===id)||null; }
+function getSub(cat,id){ return cat ? (cat.subs||[]).find(s=>s.id===id)||null : null; }
+function addCat(name){ name=(name||'').trim(); if(!name) return null; const c={id:uid(),name,color:CATPAL[cats.length%CATPAL.length],subs:[]}; cats.push(c); saveCats(); return c; }
+function addSub(catId,name){ name=(name||'').trim(); const c=getCat(catId); if(!c||!name) return null; const s={id:uid(),name}; (c.subs=c.subs||[]).push(s); saveCats(); return s; }
+function delCat(id){ cats=cats.filter(c=>c.id!==id); saveCats(); tasks.forEach(t=>{ if(t.catId===id){ t.catId=null; t.subId=null; } }); save(); }
+function delSub(catId,subId){ const c=getCat(catId); if(!c)return; c.subs=(c.subs||[]).filter(s=>s.id!==subId); saveCats(); tasks.forEach(t=>{ if(t.subId===subId) t.subId=null; }); save(); }
+
 /* ---- IndexedDB per i file allegati ---- */
 function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('tempo-files',1);
   r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('files'))r.result.createObjectStore('files',{keyPath:'id'})};
@@ -460,6 +503,9 @@ const state = {
   view:'today',
   filter:'all',
   q:'',
+  catFilter:'all',
+  subFilter:'all',
+  catManage:false,
   calMonth:(()=>{const d=new Date();return {y:d.getFullYear(),m:d.getMonth()};})(),
   calSel:todayStr(),
   editId:null,
@@ -530,14 +576,48 @@ function renderTasks(){
   let h = `<div style="height:6px"></div>`;
   h += `<div class="search">${svg('search')}<input id="q" placeholder="Cerca task o note…" value="${esc(state.q)}"></div>`;
   h += `<div class="chiprow">${FILTERS.map(([k,l])=>`<button class="chip ${state.filter===k?'on':''}" data-act="filter" data-filter="${k}">${l}</button>`).join('')}</div>`;
+  h += catRowHTML();
+  h += subRowHTML();
+  if(state.catManage) h += catManageHTML();
   h += `<div id="tlist"></div>`;
   main.innerHTML = h;
   fillTaskList();
+}
+function catRowHTML(){
+  let h=`<div class="chiprow">`;
+  h+=`<button class="catchip ${state.catFilter==='all'?'on':''}" data-act="catfilter" data-cat="all" style="--cc:var(--txt2)">Tutte</button>`;
+  h+=cats.map(c=>`<button class="catchip ${state.catFilter===c.id?'on':''}" data-act="catfilter" data-cat="${c.id}" style="--cc:${c.color}"><i></i>${esc(c.name)}</button>`).join('');
+  h+=`<button class="catchip mng ${state.catManage?'on':''}" data-act="cat-manage" style="--cc:var(--txt2)">Gestisci</button>`;
+  return h+`</div>`;
+}
+function subRowHTML(){
+  if(state.catFilter==='all') return '';
+  const c=getCat(state.catFilter); if(!c||!(c.subs||[]).length) return '';
+  let h=`<div class="chiprow">`;
+  h+=`<button class="chip ${state.subFilter==='all'?'on':''}" data-act="subfilter" data-sub="all">Tutte</button>`;
+  h+=c.subs.map(s=>`<button class="chip ${state.subFilter===s.id?'on':''}" data-act="subfilter" data-sub="${s.id}">${esc(s.name)}</button>`).join('');
+  return h+`</div>`;
+}
+function catManageHTML(){
+  return `<div class="catmng">`+cats.map(c=>`<div class="cmrow" style="--cc:${c.color}">
+      <span class="cmdot"></span>
+      <input class="cminput" value="${esc(c.name)}" data-catren="${c.id}">
+      <button class="cmdel" data-act="cat-del" data-cat="${c.id}" aria-label="Elimina categoria">${svg('trash')}</button>
+      <div class="cmsubs">
+        ${(c.subs||[]).map(s=>`<span class="cmsub">${esc(s.name)}<button data-act="catsub-del" data-cat="${c.id}" data-sub="${s.id}" aria-label="Elimina">${svg('x')}</button></span>`).join('')}
+        <span class="cmsub add">＋<input placeholder="sotto" data-field="mngsub" data-cat="${c.id}"></span>
+      </div>
+    </div>`).join('')
+    +`<div class="subadd" style="margin-top:10px">${svg('plus')}<input placeholder="Nuova categoria…" data-field="mngcat"></div></div>`;
 }
 function visibleTasks(){
   let list = tasks.slice();
   const q = state.q.trim().toLowerCase();
   if(q) list = list.filter(t=>(t.title||'').toLowerCase().includes(q)||(t.notes||'').toLowerCase().includes(q));
+  if(state.catFilter!=='all'){
+    list = list.filter(t=>t.catId===state.catFilter);
+    if(state.subFilter!=='all') list = list.filter(t=>t.subId===state.subFilter);
+  }
   return list;
 }
 function fillTaskList(){
@@ -648,7 +728,9 @@ function rowHTML(t){
     meta.push(`<span class="m ${late?'late':''}">${svg('clock')}${t.time}</span>`);
   }
   if(p) meta.push(`<span class="m"><span class="dot ${p.c}"></span>${p.l}</span>`);
-  if(t.list) meta.push(`<span class="pill">${svg('tag')}${esc(t.list)}</span>`);
+  const cat=getCat(t.catId);
+  if(cat){ const sub=getSub(cat,t.subId); meta.push(`<span class="pill" style="color:${cat.color};border-color:${cat.color}40;background:${cat.color}14"><span class="dot" style="background:${cat.color}"></span>${esc(cat.name)}${sub?' · '+esc(sub.name):''}</span>`); }
+  else if(t.list) meta.push(`<span class="pill">${svg('tag')}${esc(t.list)}</span>`);
   if(t.attachments&&t.attachments.length) meta.push(`<span class="m">${svg('clip')}${t.attachments.length}</span>`);
   const subDone = t.subtasks? t.subtasks.filter(s=>s.done).length:0;
   if(t.subtasks&&t.subtasks.length) meta.push(`<span class="m">${svg('check')}${subDone}/${t.subtasks.length}</span>`);
@@ -715,15 +797,13 @@ function renderSheet(){
       <div class="dtwrap">${svg('phone')}<input type="tel" inputmode="tel" placeholder="Numero — o scegli dalla rubrica" value="${esc(t.phone)}" data-field="phone"></div>
       <div id="callrow"></div></div>`;
 
-  h += `<div class="field"><div class="lbl">${svg('tag')} Lista</div>
-      <input class="inp" list="listnames" placeholder="es. Lavoro, Casa, Spesa…" value="${esc(t.list)}" data-field="list">
-      <datalist id="listnames">${lists.map(l=>`<option value="${esc(l)}">`).join('')}</datalist></div>`;
+  h += `<div class="field"><div class="lbl">${svg('folder')} Categoria</div><div id="catpick"></div></div>`;
 
   h += `<div class="field"><div class="lbl">${svg('check')} Sotto-task</div><div id="subs"></div></div>`;
   h += `<div class="field"><div class="lbl">${svg('clip')} Allegati</div><div id="atts"></div></div>`;
 
   sheetBody.innerHTML=h;
-  renderSubs(); renderAtts(); renderCallRow();
+  renderSubs(); renderAtts(); renderCallRow(); renderCatPick();
   autoGrow($('#f-title')); const nt=sheetBody.querySelector('[data-field=notes]'); autoGrow(nt);
 
   sheetFoot.innerHTML = `<button class="btn del" data-act="del-task">${svg('trash')}</button>
@@ -783,6 +863,19 @@ function renderCallRow(){
   }
   el.innerHTML=h;
 }
+function renderCatPick(){
+  const t=getTask(state.editId); const el=$('#catpick'); if(!el)return;
+  let h=`<div class="chips">`;
+  h+=cats.map(c=>`<button class="catchip ${t.catId===c.id?'on':''}" data-act="cat-pick" data-cat="${c.id}" style="--cc:${c.color}"><i></i>${esc(c.name)}</button>`).join('');
+  h+=`</div><div class="subadd" style="margin-top:8px">${svg('plus')}<input placeholder="Nuova categoria…" data-field="newcat"></div>`;
+  const cat=getCat(t.catId);
+  if(cat){
+    h+=`<div class="lbl" style="margin:14px 2px 8px">Sottocategoria · ${esc(cat.name)}</div><div class="chips">`;
+    h+=(cat.subs||[]).map(s=>`<button class="catchip sm ${t.subId===s.id?'on':''}" data-act="sub-pick" data-sub="${s.id}" style="--cc:${cat.color}"><i></i>${esc(s.name)}</button>`).join('');
+    h+=`</div><div class="subadd" style="margin-top:8px">${svg('plus')}<input placeholder="Nuova sottocategoria…" data-field="newsub"></div>`;
+  }
+  el.innerHTML=h;
+}
 function autoGrow(el){ if(!el)return; el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,220)+'px'; }
 
 /* ============ ACTIONS ============ */
@@ -811,6 +904,13 @@ document.addEventListener('click',e=>{
   if(a==='filter'){ state.filter=el.dataset.filter;
     document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c.dataset.filter===state.filter));
     fillTaskList(); return; }
+  if(a==='cat-pick'){ const t=getTask(state.editId); const id=el.dataset.cat; t.catId=(t.catId===id?null:id); t.subId=null; touch(t); renderCatPick(); return; }
+  if(a==='sub-pick'){ const t=getTask(state.editId); const id=el.dataset.sub; t.subId=(t.subId===id?null:id); touch(t); renderCatPick(); return; }
+  if(a==='catfilter'){ state.catFilter=el.dataset.cat; state.subFilter='all'; renderTasks(); return; }
+  if(a==='subfilter'){ state.subFilter=el.dataset.sub; renderTasks(); return; }
+  if(a==='cat-manage'){ state.catManage=!state.catManage; renderTasks(); return; }
+  if(a==='cat-del'){ const c=getCat(el.dataset.cat); if(c && confirm(`Eliminare la categoria "${c.name}"? Verrà tolta dai task.`)){ delCat(el.dataset.cat); if(state.catFilter===el.dataset.cat){state.catFilter='all';state.subFilter='all';} renderTasks(); } return; }
+  if(a==='catsub-del'){ delSub(el.dataset.cat, el.dataset.sub); renderTasks(); return; }
 
   if(a==='cal-prev'){ let {y,m}=state.calMonth; m--; if(m<0){m=11;y--;} state.calMonth={y,m}; renderCal(); return; }
   if(a==='cal-next'){ let {y,m}=state.calMonth; m++; if(m>11){m=0;y++;} state.calMonth={y,m}; renderCal(); return; }
@@ -850,6 +950,7 @@ document.addEventListener('input',e=>{
   else if(f==='list'){ const t=getTask(state.editId); t.list=e.target.value.trim(); touch(t); }
   else if(f==='phone'){ const t=getTask(state.editId); t.phone=e.target.value.trim(); touch(t); renderCallRow(); }
   else if(f==='q'){ state.q=e.target.value; fillTaskList(); }
+  const cr=e.target.dataset.catren; if(cr){ const c=getCat(cr); if(c){ c.name=e.target.value; saveCats(); } }
 });
 document.addEventListener('change',e=>{
   const f=e.target.dataset.field;
@@ -862,6 +963,10 @@ document.addEventListener('keydown',e=>{
     const t=getTask(state.editId); (t.subtasks=t.subtasks||[]).push({id:uid(),title:v,done:false}); touch(t);
     renderSubs(); const ni=$('#subnew'); if(ni)ni.focus();
   }
+  if(e.target.dataset.field==='newcat' && e.key==='Enter'){ e.preventDefault(); const c=addCat(e.target.value); if(c){ const t=getTask(state.editId); t.catId=c.id; t.subId=null; touch(t); renderCatPick(); const ni=sheetBody.querySelector('[data-field=newcat]'); if(ni)ni.focus(); } }
+  if(e.target.dataset.field==='newsub' && e.key==='Enter'){ e.preventDefault(); const t=getTask(state.editId); const s=addSub(t.catId, e.target.value); if(s){ t.subId=s.id; touch(t); renderCatPick(); const ni=sheetBody.querySelector('[data-field=newsub]'); if(ni)ni.focus(); } }
+  if(e.target.dataset.field==='mngcat' && e.key==='Enter'){ e.preventDefault(); if(addCat(e.target.value)) renderTasks(); const ni=document.querySelector('[data-field=mngcat]'); if(ni)ni.focus(); }
+  if(e.target.dataset.field==='mngsub' && e.key==='Enter'){ e.preventDefault(); addSub(e.target.dataset.cat, e.target.value); renderTasks(); }
   if(e.key==='Escape' && $('#viewer').classList.contains('on')){ closeViewer(); return; }
   if(e.key==='Escape' && sheet.classList.contains('on')) closeSheet();
 });
