@@ -871,12 +871,12 @@ if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.s
 <!-- Incolla le tue chiavi nei due punti INCOLLA_QUI qui sotto. Finché non lo fai, la app funziona uguale (solo senza notifiche). -->
 <script type="module">
 const firebaseConfig = {
-  apiKey: "INCOLLA_QUI",
-  authDomain: "INCOLLA_QUI",
-  projectId: "INCOLLA_QUI",
-  storageBucket: "INCOLLA_QUI",
-  messagingSenderId: "INCOLLA_QUI",
-  appId: "INCOLLA_QUI"
+  apiKey:            "AIzaSyDLbGyLrPaw3tQXY3HOaTxWJLnOWPUjvXU",
+  authDomain:        "cicogna-57ae0.firebaseapp.com",
+  projectId:         "cicogna-57ae0",
+  storageBucket:     "cicogna-57ae0.firebasestorage.app",
+  messagingSenderId: "1013139034396",
+  appId:             "1:1013139034396:web:4770893e05130ca600aad9"
 };
 const VAPID_KEY = "INCOLLA_QUI"; // Firebase console → Cloud Messaging → Web Push certificates → Key pair
 
@@ -899,16 +899,16 @@ if(configured){
     // Sincronizza su Firestore ogni task con una DATA (per il digest) e con ORARIO (per l'alert puntuale).
     window.fb.syncTask = async (t)=>{
       try{
-        if(!t || !t.date || t.done){ if(t&&t.id) await deleteDoc(doc(db,'tasks',t.id)).catch(()=>{}); return; }
+        if(!t || !t.date || t.done){ if(t&&t.id) await deleteDoc(doc(db,'tempo_tasks',t.id)).catch(()=>{}); return; }
         const dueAt = t.time ? new Date(t.date+'T'+t.time).getTime() : null;   // orario locale del dispositivo
         const remindedAt = (dueAt && dueAt>Date.now()) ? null : (dueAt||null);  // i task già passati non ri-suonano
-        await setDoc(doc(db,'tasks',t.id), {
+        await setDoc(doc(db,'tempo_tasks',t.id), {
           id:t.id, title:(t.title||'Task').slice(0,120), date:t.date, time:t.time||null,
           dueAt, remindedAt, done:false, updatedAt: serverTimestamp()
         });
       }catch(e){ console.warn('syncTask', e); }
     };
-    window.fb.removeTask = async (id)=>{ try{ await deleteDoc(doc(db,'tasks',id)); }catch(e){} };
+    window.fb.removeTask = async (id)=>{ try{ await deleteDoc(doc(db,'tempo_tasks',id)); }catch(e){} };
 
     window.fb.enableNotifications = async ()=>{
       if(!messaging) return {ok:false, reason:'non supportato (su iPhone aggiungi prima l’app alla Home)'};
@@ -919,7 +919,7 @@ if(configured){
       const reg = await navigator.serviceWorker.ready;
       const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
       if(!token) return {ok:false, reason:'token non ottenuto'};
-      await setDoc(doc(db,'pushTokens',token), { token, ua: navigator.userAgent.slice(0,180), createdAt: serverTimestamp() });
+      await setDoc(doc(db,'tempo_tokens',token), { token, ua: navigator.userAgent.slice(0,180), createdAt: serverTimestamp() });
       return {ok:true};
     };
 

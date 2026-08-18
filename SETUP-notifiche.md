@@ -32,13 +32,12 @@ Il tuo `sw.js` mostra la notifica anche ad app chiusa. Tocchi la notifica → si
 
 ---
 
-## Parte B — Cosa incolli nel codice (o me li mandi e lo faccio io)
+## Parte B — Codice (in gran parte già fatto)
 
-Nel file `index.html`, in fondo, nel blocco `<script type="module">`:
-- sostituisci i valori `firebaseConfig` (6 campi `INCOLLA_QUI`);
-- sostituisci `VAPID_KEY = "INCOLLA_QUI"` con la chiave del passo 4.
+- ✅ `firebaseConfig` **già inserito**: riuso il tuo progetto **cicogna-57ae0** (lo stesso di migro/cicogna), con collezioni separate `tempo_tasks` / `tempo_tokens` / `tempo_meta`.
+- ⬜ Manca solo la **VAPID key** (passo 4): mandamela in chat e la incollo io, poi ripubblico. *(È pubblica.)*
 
-> `firebaseConfig` e la VAPID key sono pubbliche: puoi mandarmele in chat e le incollo io, poi ripubblico.
+> Se preferisci un progetto Firebase separato per TEMPO invece di riusare cicogna-57ae0, dimmelo e cambio la config.
 
 ---
 

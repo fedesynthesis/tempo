@@ -28,7 +28,7 @@ function romeNow(d = new Date()) {
 }
 
 async function getTokens() {
-  const s = await db.collection('pushTokens').get();
+  const s = await db.collection('tempo_tokens').get();
   return s.docs.map(d => d.id);
 }
 
@@ -47,7 +47,7 @@ async function sendToAll(tokens, title, body) {
     if (!r.success) {
       const c = (r.error && r.error.code) || '';
       if (c.includes('registration-token-not-registered') || c.includes('invalid-argument') || c.includes('mismatched-credential')) {
-        db.collection('pushTokens').doc(tokens[i]).delete().catch(() => {});
+        db.collection('tempo_tokens').doc(tokens[i]).delete().catch(() => {});
       }
     }
   });
@@ -60,7 +60,7 @@ async function sendToAll(tokens, title, body) {
   if (!tokens.length) { console.log('Nessun token registrato — niente da fare.'); return; }
 
   // 1) ALERT per task con orario scaduto e non ancora avvisato
-  const dueSnap = await db.collection('tasks').where('dueAt', '<=', now).get();
+  const dueSnap = await db.collection('tempo_tasks').where('dueAt', '<=', now).get();
   for (const d of dueSnap.docs) {
     const t = d.data();
     if (t.done || t.dueAt == null || t.remindedAt != null) continue;
@@ -73,10 +73,10 @@ async function sendToAll(tokens, title, body) {
   // 2) DIGEST del mattino alle 07:00 (una volta al giorno)
   const { date: today, hour } = romeNow();
   if (hour >= DIGEST_HOUR) {
-    const metaRef = db.collection('meta').doc('digest');
+    const metaRef = db.collection('tempo_meta').doc('digest');
     const meta = (await metaRef.get()).data() || {};
     if (meta.lastSent !== today) {
-      const snap = await db.collection('tasks').where('date', '==', today).get();
+      const snap = await db.collection('tempo_tasks').where('date', '==', today).get();
       const list = snap.docs.map(d => d.data()).filter(t => !t.done)
         .sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
       let body;
