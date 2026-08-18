@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="./icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Caveat:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/motion@13.1.0/dist/motion.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -328,6 +328,46 @@ input[type=date].inp,input[type=time].inp{-webkit-appearance:none;appearance:non
 @keyframes vspin{to{transform:rotate(360deg)}}
 @keyframes pop{0%{transform:scale(1)}45%{transform:scale(1.32)}100%{transform:scale(1)}}
 .pop{animation:pop .36s var(--ease)}
+/* ---------- Tema "taccuino" (attivabile) ---------- */
+body.paper{
+  --bg:#f3ead4; --bg2:#eee2c8; --surface:#fffdf4; --surface2:#f6efdb;
+  --line:#e0d3b2; --line2:#cfbd93;
+  --txt:#3b3327; --txt2:#786d58; --txt3:#a99b7e;
+  --accent:#c0442e; --accent-deep:#a5371f; --accent-hi:#d4563b; --accent-soft:rgba(192,68,46,.12);
+  --blue:#3b5c9f; --ok:#4b7a3f; --warn:#c98a1e;
+  --disp:'Caveat','Fraunces',cursive;
+  background-color:var(--bg);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
+  background-blend-mode:multiply;
+}
+body.paper #root{background:transparent;box-shadow:none}
+body.paper main{background-image:repeating-linear-gradient(transparent 0 31px, rgba(59,92,159,.10) 31px 32px)}
+body.paper .topbar{background:linear-gradient(var(--bg) 72%,rgba(243,234,212,0))}
+/* intestazioni scritte a mano */
+body.paper .eyebrow{font-family:var(--disp);font-size:16px;letter-spacing:.01em;text-transform:none;color:var(--accent);font-weight:700}
+body.paper h1,body.paper h2,body.paper h3{font-family:var(--disp);letter-spacing:0}
+body.paper .brand b{font-family:var(--disp);font-size:25px}
+body.paper .hero .big{font-size:54px;line-height:.95}
+body.paper .hero .day{font-size:22px}
+body.paper .sec-h .eyebrow{font-size:18px}
+/* riquadri "disegnati a mano" */
+body.paper .card,body.paper .row,body.paper .search,body.paper .qadd,body.paper .calcard,body.paper .catmng,
+body.paper .sub,body.paper .att,body.paper .inp,body.paper .dtwrap,body.paper textarea.inp,
+body.paper .priopts button,body.paper .chip,body.paper .catchip,body.paper .iconbtn,body.paper .pill,body.paper .cnt{
+  border:1.6px solid var(--txt);
+  box-shadow:1.5px 1.5px 0 rgba(59,51,39,.13);
+  background-image:none;
+}
+body.paper .card,body.paper .row,body.paper .search,body.paper .qadd,body.paper .calcard,body.paper .catmng,body.paper .sheet{
+  border-radius:17px 12px 18px 13px/13px 18px 12px 17px;
+}
+body.paper .chip,body.paper .catchip,body.paper .pill,body.paper .cnt{border-radius:20px 15px 18px 14px/15px 18px 14px 20px}
+body.paper .iconbtn,body.paper .inp,body.paper .dtwrap,body.paper .priopts button{border-radius:12px 9px 13px 10px/10px 13px 9px 12px}
+body.paper .btn.primary,body.paper .fab,body.paper .qadd .go,body.paper .logo{border:1.6px solid var(--txt);box-shadow:2px 2px 0 rgba(59,51,39,.22)}
+body.paper .fab{border-radius:20px 16px 21px 17px/17px 21px 16px 20px}
+body.paper .nav{background:rgba(255,253,244,.94);border-top:1.6px solid var(--txt)}
+body.paper .pbar{border:1.5px solid var(--txt)}
+body.paper .cell.sel{border-radius:14px 10px 15px 11px/11px 15px 10px 14px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -339,6 +379,9 @@ input[type=date].inp,input[type=time].inp{-webkit-appearance:none;appearance:non
       <b>TEM<span>PO</span></b>
     </div>
     <div style="display:flex;gap:8px">
+      <button class="iconbtn" data-act="theme" aria-label="Tema taccuino">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h13a1 1 0 011 1v14a1 1 0 01-1 1H6a2 2 0 00-2 2V6a2 2 0 012-2z" stroke-linejoin="round"/><path d="M9 4v13" stroke-linecap="round"/></svg>
+      </button>
       <button class="iconbtn" data-act="notif" aria-label="Attiva notifiche">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8.5a6 6 0 10-12 0c0 6-2.4 7.5-2.4 7.5h16.8S18 14.5 18 8.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 20a2.5 2.5 0 005 0" stroke-linecap="round"/></svg>
       </button>
@@ -417,6 +460,7 @@ const IC = {
   download:'<path d="M12 3v12M7 11l5 5 5-5M5 21h14" stroke-linecap="round" stroke-linejoin="round"/>',
   phone:'<path d="M4 5c0 9 6 15 15 15 1 0 2-1 2-2v-3l-4-2-2 2c-3-1-5-3-6-6l2-2-2-4H6C5 3 4 4 4 5z" stroke-linejoin="round"/>',
   folder:'<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke-linejoin="round"/>',
+  book:'<path d="M5 4h13a1 1 0 011 1v14a1 1 0 01-1 1H6a2 2 0 00-2 2V6a2 2 0 012-2z" stroke-linejoin="round"/><path d="M9 4v13" stroke-linecap="round"/>',
   tag:'<path d="M3 12V5a2 2 0 012-2h7l9 9-9 9z" stroke-linejoin="round"/><circle cx="7.5" cy="7.5" r="1.4"/>',
   list:'<path d="M9 6h11M9 12h11M9 18h11" stroke-linecap="round"/><circle cx="4.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="18" r="1.2" fill="currentColor" stroke="none"/>',
   bell:'<path d="M18 8.5a6 6 0 10-12 0c0 6-2.4 7.5-2.4 7.5h16.8S18 14.5 18 8.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 20a2.5 2.5 0 005 0" stroke-linecap="round"/>',
@@ -888,6 +932,7 @@ document.addEventListener('click',e=>{
   if(a==='nav'){ const v=el.dataset.view; if(v===state.view)return; const order=['today','tasks','cal']; const dir=order.indexOf(v)>order.indexOf(state.view)?1:-1; state.view=v; render(dir); return; }
   if(a==='today-jump'){ state.view='today'; state.calSel=todayStr(); render(); return; }
   if(a==='notif'){ notifEnable(); return; }
+  if(a==='theme'){ toggleTheme(); return; }
   if(a==='new'){ openSheet(null); return; }
   if(a==='new-on'){ openSheet(null); const t=getTask(state.editId); t.date=el.dataset.date; touch(t); renderSheet(); return; }
   if(a==='close-sheet'){ closeSheet(); return; }
@@ -1118,7 +1163,12 @@ async function notifEnable(){
   catch(e){ toast('Errore attivazione notifiche'); }
 }
 
+/* ---- Tema taccuino ---- */
+function applyTheme(t){ document.body.classList.toggle('paper', t==='paper'); localStorage.setItem('tempo_theme', t); const tc=document.querySelector('meta[name=theme-color]'); if(tc) tc.setAttribute('content', t==='paper'?'#f3ead4':'#f6f6f3'); }
+function toggleTheme(){ const paper=!document.body.classList.contains('paper'); applyTheme(paper?'paper':'minimal'); toast(paper?'Modalità taccuino ✏️':'Modalità minimal'); }
+
 /* ============ START ============ */
+applyTheme(localStorage.getItem('tempo_theme')||'minimal');
 const _imp=tryImport();
 render();
 if(_imp) setTimeout(()=>toast(_imp+(_imp===1?' task importato':' task importati')),400);
