@@ -279,6 +279,22 @@ input[type=date].inp,input[type=time].inp{-webkit-appearance:none;appearance:non
 .toast.on{transform:translateX(-50%) translateY(0);opacity:1;pointer-events:auto}
 .toast button{color:var(--accent-hi);font-weight:800;font-size:14px;padding:4px 8px}
 
+/* visualizzatore allegati in-app */
+.viewer{position:fixed;inset:0;z-index:80;background:rgba(18,18,20,.97);display:none;flex-direction:column}
+.viewer.on{display:flex}
+.viewer .vbar{display:flex;align-items:center;gap:10px;padding:14px 14px;padding-top:max(14px,env(safe-area-inset-top));color:#fff}
+.viewer .vname{flex:1;min-width:0;font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.viewer .vbtn{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:rgba(255,255,255,.14);color:#fff;flex:none}
+.viewer .vbtn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2}
+.viewer .vbody{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;align-items:center;gap:12px;padding:8px 12px 34px}
+.viewer .vbody img{max-width:100%;height:auto;border-radius:8px}
+.viewer .vbody canvas{max-width:100%;height:auto;background:#fff;border-radius:4px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.viewer .vbody pre{white-space:pre-wrap;word-break:break-word;color:#eaeaea;font-family:var(--mono);font-size:13px;line-height:1.55;width:100%;max-width:680px;background:rgba(255,255,255,.05);padding:16px;border-radius:10px}
+.viewer .vmsg{color:#fff;text-align:center;margin:48px auto 0;padding:0 24px;max-width:320px}
+.viewer .vmsg .ic{width:60px;height:60px;border-radius:18px;background:rgba(255,255,255,.1);display:grid;place-items:center;margin:0 auto 14px}
+.viewer .vmsg .ic svg{width:28px;height:28px;stroke:#fff;fill:none;stroke-width:1.8}
+.viewer .vspin{color:#fff;margin:60px auto;width:34px;height:34px;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:vspin 1s linear infinite}
+@keyframes vspin{to{transform:rotate(360deg)}}
 @keyframes pop{0%{transform:scale(1)}45%{transform:scale(1.32)}100%{transform:scale(1)}}
 .pop{animation:pop .36s var(--ease)}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -329,6 +345,19 @@ input[type=date].inp,input[type=time].inp{-webkit-appearance:none;appearance:non
   <div class="sheetfoot" id="sheetfoot"></div>
 </section>
 
+<div class="viewer" id="viewer">
+  <div class="vbar">
+    <div class="vname" id="vname"></div>
+    <button class="vbtn" data-act="viewer-ext" aria-label="Apri/scarica">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 11l5 5 5-5M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="vbtn" data-act="viewer-close" aria-label="Chiudi">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <div class="vbody" id="vbody"></div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <input type="file" id="filepick" multiple hidden>
@@ -354,6 +383,9 @@ const IC = {
   cal:'<rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4" stroke-linecap="round"/>',
   file:'<path d="M13 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V9z" stroke-linejoin="round"/><path d="M13 3v6h6" stroke-linejoin="round"/>',
   img:'<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M4 18l5-5 4 3 3-3 4 4" stroke-linecap="round" stroke-linejoin="round"/>',
+  download:'<path d="M12 3v12M7 11l5 5 5-5M5 21h14" stroke-linecap="round" stroke-linejoin="round"/>',
+  phone:'<path d="M4 5c0 9 6 15 15 15 1 0 2-1 2-2v-3l-4-2-2 2c-3-1-5-3-6-6l2-2-2-4H6C5 3 4 4 4 5z" stroke-linejoin="round"/>',
+  folder:'<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke-linejoin="round"/>',
   tag:'<path d="M3 12V5a2 2 0 012-2h7l9 9-9 9z" stroke-linejoin="round"/><circle cx="7.5" cy="7.5" r="1.4"/>',
   list:'<path d="M9 6h11M9 12h11M9 18h11" stroke-linecap="round"/><circle cx="4.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="18" r="1.2" fill="currentColor" stroke="none"/>',
   bell:'<path d="M18 8.5a6 6 0 10-12 0c0 6-2.4 7.5-2.4 7.5h16.8S18 14.5 18 8.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 20a2.5 2.5 0 005 0" stroke-linecap="round"/>',
@@ -746,6 +778,8 @@ document.addEventListener('click',e=>{
   if(a==='att-add'){ const fp=$('#filepick'); fp.value=''; fp._tid=state.editId; fp.click(); return; }
   if(a==='att-del'){ const t=getTask(state.editId); const aid=el.dataset.aid; t.attachments=t.attachments.filter(x=>x.id!==aid); touch(t); fileDel(aid); renderAtts(); return; }
   if(a==='att-open'){ openAttachment(el.dataset.aid); return; }
+  if(a==='viewer-close'){ closeViewer(); return; }
+  if(a==='viewer-ext'){ viewerExternal(); return; }
 });
 
 /* submit quick-add (Oggi) */
@@ -777,6 +811,7 @@ document.addEventListener('keydown',e=>{
     const t=getTask(state.editId); (t.subtasks=t.subtasks||[]).push({id:uid(),title:v,done:false}); touch(t);
     renderSubs(); const ni=$('#subnew'); if(ni)ni.focus();
   }
+  if(e.key==='Escape' && $('#viewer').classList.contains('on')){ closeViewer(); return; }
   if(e.key==='Escape' && sheet.classList.contains('on')) closeSheet();
 });
 
@@ -791,13 +826,73 @@ $('#filepick').addEventListener('change',async e=>{
   }
   touch(t); renderAtts();
 });
+/* ---- Visualizzatore allegati IN-APP (immagini, PDF, testo) ---- */
+let _viewer={url:null, rec:null};
+let _pdfjs=null;
+async function loadPdfjs(){
+  if(_pdfjs) return _pdfjs;
+  const V='4.7.76';
+  const mod=await import(`https://cdn.jsdelivr.net/npm/pdfjs-dist@${V}/build/pdf.min.mjs`);
+  mod.GlobalWorkerOptions.workerSrc=`https://cdn.jsdelivr.net/npm/pdfjs-dist@${V}/build/pdf.worker.min.mjs`;
+  _pdfjs=mod; return mod;
+}
 async function openAttachment(aid){
-  try{ const rec=await fileGet(aid); if(!rec){toast('File non trovato');return;}
-    const url=URL.createObjectURL(rec.blob);
-    const a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; a.download=rec.name||'file';
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),60000);
-  }catch(e){ toast('Impossibile aprire il file'); }
+  const rec=await fileGet(aid);
+  if(!rec){ toast('File non trovato'); return; }
+  if(_viewer.url) URL.revokeObjectURL(_viewer.url);
+  const url=URL.createObjectURL(rec.blob);
+  _viewer={url, rec};
+  $('#vname').textContent=rec.name||'Allegato';
+  const body=$('#vbody'); body.innerHTML='<div class="vspin"></div>';
+  $('#viewer').classList.add('on'); document.body.classList.add('lock');
+  const type=rec.type||''; const name=(rec.name||'').toLowerCase();
+  try{
+    if(type.startsWith('image/')){
+      body.innerHTML=`<img src="${url}" alt="${esc(rec.name)}">`;
+    } else if(type==='application/pdf' || name.endsWith('.pdf')){
+      await renderPdf(rec, body);
+    } else if(type.startsWith('text/') || /\.(txt|csv|md|json|log)$/i.test(name)){
+      const txt=await rec.blob.text();
+      const pre=document.createElement('pre'); pre.textContent=txt.slice(0,100000);
+      body.innerHTML=''; body.appendChild(pre);
+    } else {
+      body.innerHTML=`<div class="vmsg"><div class="ic">${svg('file')}</div><b>Anteprima non disponibile</b><p style="color:#bbb;font-size:13.5px;margin-top:6px">Tipo file: ${esc(type||'sconosciuto')}.</p><button class="btn" data-act="viewer-ext" style="margin-top:16px">${svg('download')} Apri / Scarica</button></div>`;
+    }
+  }catch(e){
+    body.innerHTML=`<div class="vmsg"><div class="ic">${svg('file')}</div><b>Impossibile aprire il file</b><button class="btn" data-act="viewer-ext" style="margin-top:14px">${svg('download')} Apri / Scarica</button></div>`;
+  }
+}
+async function renderPdf(rec, body){
+  const pdfjs=await loadPdfjs();
+  const data=new Uint8Array(await rec.blob.arrayBuffer());
+  const pdf=await pdfjs.getDocument({data}).promise;
+  body.innerHTML='';
+  const maxW=Math.min((body.clientWidth||360)-24, 760);
+  const dpr=Math.min(window.devicePixelRatio||1, 2);
+  const n=Math.min(pdf.numPages, 30);
+  for(let i=1;i<=n;i++){
+    const page=await pdf.getPage(i);
+    const v1=page.getViewport({scale:1});
+    const vp=page.getViewport({scale:maxW/v1.width});
+    const canvas=document.createElement('canvas');
+    canvas.width=Math.floor(vp.width*dpr); canvas.height=Math.floor(vp.height*dpr);
+    canvas.style.width=vp.width+'px'; canvas.style.height=vp.height+'px';
+    const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr);
+    body.appendChild(canvas);
+    await page.render({canvasContext:ctx, viewport:vp}).promise;
+  }
+  if(pdf.numPages>n){ const m=document.createElement('div'); m.className='vmsg'; m.style.margin='20px auto 0'; m.innerHTML=`<p style="color:#bbb">…prime ${n} pagine di ${pdf.numPages}.</p>`; body.appendChild(m); }
+}
+function closeViewer(){
+  $('#viewer').classList.remove('on');
+  if(!sheet.classList.contains('on')) document.body.classList.remove('lock');
+  const u=_viewer.url; if(u){ _viewer.url=null; setTimeout(()=>URL.revokeObjectURL(u),300); }
+  $('#vbody').innerHTML='';
+}
+function viewerExternal(){
+  if(!_viewer.url||!_viewer.rec) return;
+  const a=document.createElement('a'); a.href=_viewer.url; a.target='_blank'; a.rel='noopener'; a.download=_viewer.rec.name||'file';
+  document.body.appendChild(a); a.click(); a.remove();
 }
 
 /* ---- delete con annulla ---- */
