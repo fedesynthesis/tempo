@@ -125,6 +125,7 @@ main{padding:2px 16px calc(var(--nav-h) + 34px) 16px}
   font-size:13px;font-weight:600;color:var(--txt2);white-space:nowrap;flex:none;transition:.18s var(--ease)}
 .chip.on{background:var(--txt);border-color:var(--txt);color:#fff;box-shadow:0 6px 16px -6px rgba(20,20,25,.4)}
 .chip:active{transform:scale(.95)}
+.chip svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;display:inline-block;vertical-align:-2px;margin-right:2px}
 
 /* ---------- Search ---------- */
 .search{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);
@@ -263,6 +264,13 @@ input[type=date].inp,input[type=time].inp{-webkit-appearance:none;appearance:non
   border-radius:var(--r-s);color:var(--txt2);font-weight:700;font-size:14px;margin-top:8px}
 .attadd svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2.2}
 
+/* telefono / chiamata */
+.callbtn{margin-top:10px;text-decoration:none}
+.callsug{display:flex;align-items:center;gap:9px;width:100%;margin-top:10px;padding:11px 13px;border-radius:var(--r-s);
+  background:var(--ok-soft);border:1px solid rgba(26,165,104,.28);color:var(--ok);font-weight:600;font-size:13.5px;text-align:left}
+.callsug svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2;flex:none}
+.callsug b{font-weight:800}
+
 .sheetfoot{display:flex;gap:10px;padding:14px 18px;border-top:1px solid var(--line);background:var(--bg);flex:none}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:14px 18px;border-radius:var(--r-s);
   font-weight:700;font-size:15px;transition:transform .1s var(--ease)}
@@ -400,6 +408,22 @@ function load(){ try{return JSON.parse(localStorage.getItem(KEY))||[]}catch(e){r
 function save(){ localStorage.setItem(KEY, JSON.stringify(tasks)); }
 const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 function getTask(id){ return tasks.find(t=>t.id===id); }
+
+/* ---- Rubrica interna (nome → numero) per la funzione Chiama ---- */
+const CKEY='tempo_contacts_v1';
+let contacts = loadContacts();
+function loadContacts(){ try{return JSON.parse(localStorage.getItem(CKEY))||[]}catch(e){return []} }
+function saveContacts(){ localStorage.setItem(CKEY, JSON.stringify(contacts)); }
+function extractCallName(title){
+  const m=(title||'').match(/^\s*(?:chiam\w*|telefon\w*|call)\s+(?:a\s+|al\s+)?(.+)$/i);
+  return m ? m[1].trim() : '';
+}
+function findContact(name){
+  if(!name) return null;
+  const n=name.toLowerCase().trim(); if(!n) return null;
+  return contacts.find(c=>{const cn=(c.name||'').toLowerCase(); return cn && (n.includes(cn)||cn.includes(n));}) || null;
+}
+const telHref = p => 'tel:'+String(p||'').replace(/[^\d+*#]/g,'');
 
 /* ---- IndexedDB per i file allegati ---- */
 function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('tempo-files',1);
@@ -628,6 +652,7 @@ function rowHTML(t){
   if(t.attachments&&t.attachments.length) meta.push(`<span class="m">${svg('clip')}${t.attachments.length}</span>`);
   const subDone = t.subtasks? t.subtasks.filter(s=>s.done).length:0;
   if(t.subtasks&&t.subtasks.length) meta.push(`<span class="m">${svg('check')}${subDone}/${t.subtasks.length}</span>`);
+  if(t.phone) meta.push(`<span class="m">${svg('phone')}</span>`);
   if(t.notes) meta.push(`<span class="m">${svg('note')}</span>`);
   const pcls = t.priority?`pri-${t.priority}`:'';
   return `<div class="row ${t.done?'done':''}" data-act="open" data-id="${t.id}">
@@ -647,7 +672,7 @@ let sheetNew=false;
 function openSheet(id){
   let t;
   if(id){ t=getTask(id); sheetNew=false; }
-  else { t={id:uid(),title:'',notes:'',done:false,date:null,time:null,priority:null,list:'',subtasks:[],attachments:[],createdAt:Date.now(),updatedAt:Date.now()}; tasks.unshift(t); sheetNew=true; }
+  else { t={id:uid(),title:'',notes:'',done:false,date:null,time:null,priority:null,list:'',phone:'',subtasks:[],attachments:[],createdAt:Date.now(),updatedAt:Date.now()}; tasks.unshift(t); sheetNew=true; }
   state.editId=t.id;
   renderSheet();
   document.body.classList.add('lock');
@@ -686,6 +711,10 @@ function renderSheet(){
         ${prioBtn('none',null,t)}${prioBtn('low','low',t)}${prioBtn('med','med',t)}${prioBtn('high','high',t)}
       </div></div>`;
 
+  h += `<div class="field"><div class="lbl">${svg('phone')} Telefono</div>
+      <div class="dtwrap">${svg('phone')}<input type="tel" inputmode="tel" placeholder="Numero — o scegli dalla rubrica" value="${esc(t.phone)}" data-field="phone"></div>
+      <div id="callrow"></div></div>`;
+
   h += `<div class="field"><div class="lbl">${svg('tag')} Lista</div>
       <input class="inp" list="listnames" placeholder="es. Lavoro, Casa, Spesa…" value="${esc(t.list)}" data-field="list">
       <datalist id="listnames">${lists.map(l=>`<option value="${esc(l)}">`).join('')}</datalist></div>`;
@@ -694,7 +723,7 @@ function renderSheet(){
   h += `<div class="field"><div class="lbl">${svg('clip')} Allegati</div><div id="atts"></div></div>`;
 
   sheetBody.innerHTML=h;
-  renderSubs(); renderAtts();
+  renderSubs(); renderAtts(); renderCallRow();
   autoGrow($('#f-title')); const nt=sheetBody.querySelector('[data-field=notes]'); autoGrow(nt);
 
   sheetFoot.innerHTML = `<button class="btn del" data-act="del-task">${svg('trash')}</button>
@@ -734,6 +763,25 @@ function renderAtts(){
     try{ const rec=await fileGet(a.id); if(!rec)return; const url=URL.createObjectURL(rec.blob);
       const th=$('#th-'+a.id); if(th){ th.innerHTML=`<img src="${url}" alt="">`; } }catch(e){}
   });
+}
+function renderCallRow(){
+  const t=getTask(state.editId); const el=$('#callrow'); if(!el)return;
+  let h='';
+  if(t.phone){
+    h += `<a class="btn primary callbtn" href="${telHref(t.phone)}">${svg('phone')} Chiama ${esc(t.phone)}</a>`;
+  } else {
+    const c=findContact(extractCallName(t.title));   // riconosce "chiamare Mike"
+    if(c) h += `<button class="callsug" data-act="call-use" data-phone="${esc(c.phone)}">${svg('phone')}<span>In rubrica: <b>${esc(c.name)}</b> · ${esc(c.phone)} — tocca per usare</span></button>`;
+  }
+  if(contacts.length){
+    h += `<div class="chips" style="margin-top:10px">`+contacts.map(c=>`<button class="chip" data-act="call-use" data-phone="${esc(c.phone)}">${svg('phone')} ${esc(c.name)}</button>`).join('')+`</div>`;
+  }
+  if(t.phone){
+    const nm=extractCallName(t.title)||(t.title||'').trim()||'contatto';
+    const exists=contacts.some(c=>telHref(c.phone)===telHref(t.phone));
+    if(!exists) h += `<button class="linkbtn" data-act="call-save" style="margin-top:10px;background:none;border:none;padding:4px 2px">＋ Salva "${esc(nm)}" in rubrica</button>`;
+  }
+  el.innerHTML=h;
 }
 function autoGrow(el){ if(!el)return; el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,220)+'px'; }
 
@@ -780,6 +828,8 @@ document.addEventListener('click',e=>{
   if(a==='att-open'){ openAttachment(el.dataset.aid); return; }
   if(a==='viewer-close'){ closeViewer(); return; }
   if(a==='viewer-ext'){ viewerExternal(); return; }
+  if(a==='call-use'){ const t=getTask(state.editId); if(!t)return; t.phone=el.dataset.phone; touch(t); const inp=sheetBody.querySelector('[data-field=phone]'); if(inp) inp.value=t.phone; renderCallRow(); return; }
+  if(a==='call-save'){ const t=getTask(state.editId); if(!t||!t.phone)return; const nm=extractCallName(t.title)||(t.title||'').trim()||t.phone; if(!contacts.some(c=>telHref(c.phone)===telHref(t.phone))){ contacts.push({id:uid(),name:nm,phone:t.phone}); saveContacts(); toast('Salvato in rubrica'); } renderCallRow(); return; }
 });
 
 /* submit quick-add (Oggi) */
@@ -795,9 +845,10 @@ document.addEventListener('submit',e=>{
 /* input/change delegati (sheet + ricerca) */
 document.addEventListener('input',e=>{
   const f=e.target.dataset.field;
-  if(f==='title'){ const t=getTask(state.editId); t.title=e.target.value; touch(t); autoGrow(e.target); }
+  if(f==='title'){ const t=getTask(state.editId); t.title=e.target.value; touch(t); autoGrow(e.target); if($('#callrow')) renderCallRow(); }
   else if(f==='notes'){ const t=getTask(state.editId); t.notes=e.target.value; touch(t); autoGrow(e.target); }
   else if(f==='list'){ const t=getTask(state.editId); t.list=e.target.value.trim(); touch(t); }
+  else if(f==='phone'){ const t=getTask(state.editId); t.phone=e.target.value.trim(); touch(t); renderCallRow(); }
   else if(f==='q'){ state.q=e.target.value; fillTaskList(); }
 });
 document.addEventListener('change',e=>{
