@@ -818,8 +818,32 @@ function toast(msg, actLabel, cb){
   grab.addEventListener('mousedown',e=>{onDown(e.clientY); const mm=ev=>onMove(ev.clientY),mu=()=>{onUp();document.removeEventListener('mousemove',mm);document.removeEventListener('mouseup',mu);}; document.addEventListener('mousemove',mm); document.addEventListener('mouseup',mu);});
 })();
 
+/* ============ IMPORT via link (#import=base64) ============ */
+function tryImport(){
+  const m=(location.hash||'').match(/^#import=([\s\S]+)$/);
+  if(!m) return 0;
+  let data;
+  try{ data=JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1]))))); }
+  catch(e){ history.replaceState(null,'',location.pathname+location.search); return 0; }
+  history.replaceState(null,'',location.pathname+location.search); // evita re-import al refresh
+  if(!Array.isArray(data)) return 0;
+  const seen=new Set(tasks.map(t=>(t.title||'').trim().toLowerCase()+'|'+(t.date||'')));
+  let n=0;
+  data.forEach(d=>{
+    if(!d||!d.title) return;
+    const key=String(d.title).trim().toLowerCase()+'|'+(d.date||'');
+    if(seen.has(key)) return; // niente duplicati
+    tasks.push({id:uid(),title:String(d.title),notes:d.notes||'',done:!!d.done,date:d.date||null,time:d.time||null,priority:d.priority||null,list:d.list||'',subtasks:[],attachments:[],createdAt:Date.now(),updatedAt:Date.now()});
+    seen.add(key); n++;
+  });
+  if(n) save();
+  return n;
+}
+
 /* ============ START ============ */
+const _imp=tryImport();
 render();
+if(_imp) setTimeout(()=>toast(_imp+(_imp===1?' task importato':' task importati')),400);
 if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{})); }
 </script>
 </body>
