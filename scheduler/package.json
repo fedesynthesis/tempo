@@ -1,0 +1,10 @@
+{
+  "name": "tempo-scheduler",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Cron GitHub Actions: manda alert per le task in scadenza + digest mattutino (TEMPO).",
+  "main": "send-reminders.js",
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}

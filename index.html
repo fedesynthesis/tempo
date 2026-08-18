@@ -288,9 +288,14 @@ input[type=date].inp,input[type=time].inp{-webkit-appearance:none;appearance:non
       <div class="logo"><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-11" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
       <b>TEM<span>PO</span></b>
     </div>
-    <button class="iconbtn" data-act="today-jump" aria-label="Vai a oggi">
-      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4" stroke-linecap="round"/><circle cx="12" cy="15" r="2.2" fill="currentColor" stroke="none"/></svg>
-    </button>
+    <div style="display:flex;gap:8px">
+      <button class="iconbtn" data-act="notif" aria-label="Attiva notifiche">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8.5a6 6 0 10-12 0c0 6-2.4 7.5-2.4 7.5h16.8S18 14.5 18 8.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 20a2.5 2.5 0 005 0" stroke-linecap="round"/></svg>
+      </button>
+      <button class="iconbtn" data-act="today-jump" aria-label="Vai a oggi">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4" stroke-linecap="round"/><circle cx="12" cy="15" r="2.2" fill="currentColor" stroke="none"/></svg>
+      </button>
+    </div>
   </header>
   <main id="main"></main>
 </div>
@@ -348,6 +353,7 @@ const IC = {
   img:'<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M4 18l5-5 4 3 3-3 4 4" stroke-linecap="round" stroke-linejoin="round"/>',
   tag:'<path d="M3 12V5a2 2 0 012-2h7l9 9-9 9z" stroke-linejoin="round"/><circle cx="7.5" cy="7.5" r="1.4"/>',
   list:'<path d="M9 6h11M9 12h11M9 18h11" stroke-linecap="round"/><circle cx="4.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="18" r="1.2" fill="currentColor" stroke="none"/>',
+  bell:'<path d="M18 8.5a6 6 0 10-12 0c0 6-2.4 7.5-2.4 7.5h16.8S18 14.5 18 8.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 20a2.5 2.5 0 005 0" stroke-linecap="round"/>',
   sun:'<circle cx="12" cy="12" r="9"/>'
 };
 const svg = (n,cls='') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${IC[n]||''}</svg>`;
@@ -615,6 +621,8 @@ function closeSheet(){
     tasks = tasks.filter(x=>x.id!==t.id); // scarta il nuovo task vuoto
   }
   save();
+  const _eid=state.editId, _et=getTask(_eid);
+  if(_et) reconcile(_et); else if(_eid) reconcileRemove(_eid); // sincronizza il reminder su Firestore
   sheet.classList.remove('on'); scrim.classList.remove('on'); document.body.classList.remove('lock');
   state.editId=null; sheetNew=false;
   render();
@@ -699,12 +707,13 @@ document.addEventListener('click',e=>{
 
   if(a==='nav'){ const v=el.dataset.view; if(v===state.view)return; const order=['today','tasks','cal']; const dir=order.indexOf(v)>order.indexOf(state.view)?1:-1; state.view=v; render(dir); return; }
   if(a==='today-jump'){ state.view='today'; state.calSel=todayStr(); render(); return; }
+  if(a==='notif'){ notifEnable(); return; }
   if(a==='new'){ openSheet(null); return; }
   if(a==='new-on'){ openSheet(null); const t=getTask(state.editId); t.date=el.dataset.date; touch(t); renderSheet(); return; }
   if(a==='close-sheet'){ closeSheet(); return; }
 
   if(a==='toggle'){ e.stopPropagation(); const t=getTask(el.dataset.id); if(!t)return;
-    t.done=!t.done; touch(t);
+    t.done=!t.done; touch(t); reconcile(t);
     const ck=el; if(M){try{M.animate(ck,{scale:[1,1.32,1]},{duration:.34});}catch(e){}} else ck.classList.add('pop');
     const allDoneNow = t.done && t.date===todayStr() && tasks.filter(x=>x.date===todayStr()&&!x.done).length===0;
     setTimeout(()=>{ render(); if(allDoneNow) toast('Tutto fatto per oggi 🎉'); },160);
@@ -752,8 +761,8 @@ document.addEventListener('input',e=>{
 });
 document.addEventListener('change',e=>{
   const f=e.target.dataset.field;
-  if(f==='date'){ const t=getTask(state.editId); t.date=e.target.value||null; touch(t); }
-  else if(f==='time'){ const t=getTask(state.editId); t.time=e.target.value||null; touch(t); }
+  if(f==='date'){ const t=getTask(state.editId); t.date=e.target.value||null; touch(t); reconcile(t); }
+  else if(f==='time'){ const t=getTask(state.editId); t.time=e.target.value||null; touch(t); reconcile(t); }
 });
 document.addEventListener('keydown',e=>{
   if(e.target.dataset.field==='subnew' && e.key==='Enter'){ e.preventDefault();
@@ -788,10 +797,10 @@ async function openAttachment(aid){
 let pendingDel=null;
 function deleteTask(id){
   const idx=tasks.findIndex(x=>x.id===id); if(idx<0)return;
-  const t=tasks[idx]; tasks.splice(idx,1); save();
+  const t=tasks[idx]; tasks.splice(idx,1); save(); reconcileRemove(id);
   if(pendingDel){ clearTimeout(pendingDel.timer); purge(pendingDel.task); }
   pendingDel={task:t, timer:setTimeout(()=>{ purge(t); pendingDel=null; }, 6000)};
-  toast('Task eliminato', 'Annulla', ()=>{ tasks.splice(Math.min(idx,tasks.length),0,t); save(); clearTimeout(pendingDel.timer); pendingDel=null; render(); });
+  toast('Task eliminato', 'Annulla', ()=>{ tasks.splice(Math.min(idx,tasks.length),0,t); save(); reconcile(t); clearTimeout(pendingDel.timer); pendingDel=null; render(); });
 }
 function purge(t){ (t.attachments||[]).forEach(a=>fileDel(a.id)); }
 
@@ -840,11 +849,83 @@ function tryImport(){
   return n;
 }
 
+/* ============ Firebase reminder hooks (no-op finché non configuri le chiavi) ============ */
+function reconcile(t){ try{ if(t && window.fb && window.fb.ready) window.fb.syncTask(t); }catch(e){} }
+function reconcileRemove(id){ try{ if(window.fb && window.fb.ready) window.fb.removeTask(id); }catch(e){} }
+document.addEventListener('fb-ready',()=>{ try{ tasks.forEach(reconcile); }catch(e){} });
+async function notifEnable(){
+  if(!window.fb || !window.fb.ready){ toast('Prima configura Firebase (vedi SETUP-notifiche.md)'); return; }
+  toast('Attivazione notifiche…');
+  try{ const r=await window.fb.enableNotifications(); toast(r.ok ? 'Notifiche attivate ✓' : 'Non attivate: '+r.reason); }
+  catch(e){ toast('Errore attivazione notifiche'); }
+}
+
 /* ============ START ============ */
 const _imp=tryImport();
 render();
 if(_imp) setTimeout(()=>toast(_imp+(_imp===1?' task importato':' task importati')),400);
 if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{})); }
+</script>
+
+<!-- ============ Firebase: notifiche push + digest mattutino ============ -->
+<!-- Incolla le tue chiavi nei due punti INCOLLA_QUI qui sotto. Finché non lo fai, la app funziona uguale (solo senza notifiche). -->
+<script type="module">
+const firebaseConfig = {
+  apiKey: "INCOLLA_QUI",
+  authDomain: "INCOLLA_QUI",
+  projectId: "INCOLLA_QUI",
+  storageBucket: "INCOLLA_QUI",
+  messagingSenderId: "INCOLLA_QUI",
+  appId: "INCOLLA_QUI"
+};
+const VAPID_KEY = "INCOLLA_QUI"; // Firebase console → Cloud Messaging → Web Push certificates → Key pair
+
+window.fb = { ready:false, syncTask(){}, removeTask(){}, enableNotifications: async()=>({ok:false,reason:'Firebase non configurato'}) };
+
+const configured = !Object.values(firebaseConfig).some(v=>String(v).includes('INCOLLA_QUI')) && !VAPID_KEY.includes('INCOLLA_QUI');
+if(configured){
+  try{
+    const V='10.12.2';
+    const { initializeApp } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
+    const { getFirestore, doc, setDoc, deleteDoc, serverTimestamp } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
+    const { getMessaging, getToken, isSupported } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-messaging.js`);
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
+    let messaging = null;
+    try{ if(await isSupported()) messaging = getMessaging(app); }catch(_){}
+
+    window.fb.ready = true;
+
+    // Sincronizza su Firestore ogni task con una DATA (per il digest) e con ORARIO (per l'alert puntuale).
+    window.fb.syncTask = async (t)=>{
+      try{
+        if(!t || !t.date || t.done){ if(t&&t.id) await deleteDoc(doc(db,'tasks',t.id)).catch(()=>{}); return; }
+        const dueAt = t.time ? new Date(t.date+'T'+t.time).getTime() : null;   // orario locale del dispositivo
+        const remindedAt = (dueAt && dueAt>Date.now()) ? null : (dueAt||null);  // i task già passati non ri-suonano
+        await setDoc(doc(db,'tasks',t.id), {
+          id:t.id, title:(t.title||'Task').slice(0,120), date:t.date, time:t.time||null,
+          dueAt, remindedAt, done:false, updatedAt: serverTimestamp()
+        });
+      }catch(e){ console.warn('syncTask', e); }
+    };
+    window.fb.removeTask = async (id)=>{ try{ await deleteDoc(doc(db,'tasks',id)); }catch(e){} };
+
+    window.fb.enableNotifications = async ()=>{
+      if(!messaging) return {ok:false, reason:'non supportato (su iPhone aggiungi prima l’app alla Home)'};
+      if(!('Notification' in window)) return {ok:false, reason:'notifiche non disponibili'};
+      let perm = Notification.permission;
+      if(perm==='default') perm = await Notification.requestPermission();
+      if(perm!=='granted') return {ok:false, reason:'permesso negato'};
+      const reg = await navigator.serviceWorker.ready;
+      const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+      if(!token) return {ok:false, reason:'token non ottenuto'};
+      await setDoc(doc(db,'pushTokens',token), { token, ua: navigator.userAgent.slice(0,180), createdAt: serverTimestamp() });
+      return {ok:true};
+    };
+
+    document.dispatchEvent(new Event('fb-ready'));   // sincronizza subito i task esistenti
+  }catch(e){ console.warn('Firebase non inizializzato:', e); }
+}
 </script>
 </body>
 </html>

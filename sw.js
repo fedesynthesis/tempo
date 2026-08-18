@@ -1,5 +1,5 @@
-/* TEMPO service worker — app offline + cache font/animazioni */
-const CACHE='tempo-v3';
+/* TEMPO service worker — app offline + cache font/animazioni + notifiche push */
+const CACHE='tempo-v4';
 const CORE=['./','./index.html','./manifest.json','./icon.svg','./icon-180.png','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(CACHE).then(c=>{
@@ -16,7 +16,6 @@ self.addEventListener('fetch',e=>{
   const url=new URL(req.url);
   const accept=req.headers.get('accept')||'';
   // Documenti HTML (navigazioni comprese): SEMPRE network-first, fallback cache.
-  // Così un nuovo index.html (o un link con #import=) arriva subito quando c'è rete.
   const isDoc = req.mode==='navigate' || req.destination==='document' || accept.includes('text/html');
   if(url.origin===location.origin && isDoc){
     e.respondWith(
@@ -25,15 +24,39 @@ self.addEventListener('fetch',e=>{
     );
     return;
   }
-  // CDN font/motion: cache-first con aggiornamento in background
   if(url.hostname==='cdn.jsdelivr.net'||url.hostname.indexOf('fonts.g')!==-1){
     e.respondWith(
       caches.match(req).then(c=>c||fetch(req).then(r=>{const cl=r.clone();caches.open(CACHE).then(ca=>ca.put(req,cl));return r}).catch(()=>c))
     );
     return;
   }
-  // altri asset stesso dominio (icone, manifest): cache-first
   if(url.origin===location.origin){
     e.respondWith(caches.match(req).then(c=>c||fetch(req)));
   }
+});
+
+/* ---- Notifiche push (FCM manda un webpush; qui la mostro) ---- */
+self.addEventListener('push',e=>{
+  let d={};
+  try{ d = e.data ? e.data.json() : {}; }catch(_){ try{ d={notification:{body:e.data.text()}}; }catch(__){ d={}; } }
+  const n = d.notification || (d.data||{});
+  const title = n.title || 'TEMPO — in scadenza';
+  const body  = n.body  || 'Hai un task in scadenza';
+  const opts = {
+    body,
+    icon:'./icon-192.png',
+    badge:'./icon-192.png',
+    tag: n.tag || undefined,
+    data: { link: (d.fcmOptions&&d.fcmOptions.link) || (n.click_action) || './' },
+    vibrate:[80,40,80]
+  };
+  e.waitUntil(self.registration.showNotification(title, opts));
+});
+self.addEventListener('notificationclick',e=>{
+  e.notification.close();
+  const link = (e.notification.data && e.notification.data.link) || './';
+  e.waitUntil(clients.matchAll({type:'window',includeUncontrolled:true}).then(ws=>{
+    for(const w of ws){ if('focus' in w) return w.focus(); }
+    if(clients.openWindow) return clients.openWindow(link);
+  }));
 });
