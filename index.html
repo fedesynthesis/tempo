@@ -159,7 +159,10 @@ main{padding:2px 16px calc(var(--nav-h) + 34px) 16px}
 .cell.sel.today{color:#fff}
 .cell:active{transform:scale(.92)}
 .cell .dots{display:flex;gap:3px;height:6px;align-items:center}
-.cell .dots i{width:5px;height:5px;border-radius:50%;background:var(--accent)}
+.cell .dots i{width:5px;height:5px;border-radius:50%;background:var(--txt3)}
+.cell .dots i.high{background:var(--accent)}
+.cell .dots i.med{background:var(--warn)}
+.cell .dots i.low{background:var(--blue)}
 .cell.sel .dots i{background:#fff}
 .cell .more{font-size:8px;line-height:1}
 .daypanel{margin-top:18px}
@@ -558,9 +561,13 @@ function renderCal(){
 }
 function cellHTML(d,oth,t){
   const s = dstr(d);
-  const cnt = tasks.filter(x=>x.date===s && !x.done).length;
+  const dayT = tasks.filter(x=>x.date===s && !x.done);
+  const rank={high:0,med:1,low:2}; // mostra prima le priorità più alte
+  const ord = dayT.slice().sort((a,b)=>(rank[a.priority]??3)-(rank[b.priority]??3));
   const cls = ['cell']; if(oth)cls.push('oth'); if(s===t)cls.push('today'); if(s===state.calSel)cls.push('sel');
-  const dots = cnt? `<div class="dots">${Array.from({length:Math.min(cnt,3)}).map(()=>'<i></i>').join('')}</div>` : `<div class="dots"></div>`;
+  const dots = dayT.length
+    ? `<div class="dots">${ord.slice(0,3).map(x=>`<i class="${x.priority||''}"></i>`).join('')}</div>`
+    : `<div class="dots"></div>`;
   return `<button class="${cls.join(' ')}" data-act="cal-day" data-date="${s}"><span>${d.getDate()}</span>${dots}</button>`;
 }
 

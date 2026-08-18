@@ -64,7 +64,7 @@ aggiunto a parte perché caricarlo richiede un permesso extra su GitHub (vedi pa
 1. iPhone (Safari) → apri https://fedesynthesis.github.io/tempo/ → **Condividi → Aggiungi a Home**.
 2. Apri TEMPO **dall'icona in Home** → tocca la **🔔 campanella** in alto → concedi il permesso.
 3. Crea un task con **oggi + un orario tra 6-7 minuti** → aspetta il cron → deve arrivare la notifica.
-4. Il **digest** arriva al primo giro del cron dopo le **07:00** italiane.
+4. Il **digest** arriva al primo giro del cron dopo le **06:50** italiane.
 
 ---
 

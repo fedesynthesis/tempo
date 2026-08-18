@@ -1,6 +1,6 @@
 /* TEMPO — scheduler notifiche (gira su GitHub Actions ogni ~5 min)
  * 1) Alert per ogni task con orario, quando arriva la scadenza.
- * 2) Digest mattutino alle 07:00 (ora italiana): "ecco i task di oggi".
+ * 2) Digest mattutino alle 06:50 (ora italiana): "ecco i task di oggi".
  * Legge da Firestore (collezioni: tasks, pushTokens, meta) e manda push via FCM.
  * La chiave del service account arriva dalla env FIREBASE_SERVICE_ACCOUNT (secret GitHub).
  */
@@ -15,7 +15,8 @@ const db = admin.firestore();
 const fcm = admin.messaging();
 
 const TZ = 'Europe/Rome';          // fuso per il digest (gestisce anche l'ora legale)
-const DIGEST_HOUR = 7;             // 07:00
+const DIGEST_HOUR = 6;             // 06:50
+const DIGEST_MIN  = 50;
 const APP_URL = 'https://fedesynthesis.github.io/tempo/';
 
 function romeNow(d = new Date()) {
@@ -70,9 +71,9 @@ async function sendToAll(tokens, title, body) {
     console.log('Alert inviato:', t.title);
   }
 
-  // 2) DIGEST del mattino alle 07:00 (una volta al giorno)
-  const { date: today, hour } = romeNow();
-  if (hour >= DIGEST_HOUR) {
+  // 2) DIGEST del mattino alle 06:50 (una volta al giorno)
+  const { date: today, hour, minute } = romeNow();
+  if (hour > DIGEST_HOUR || (hour === DIGEST_HOUR && minute >= DIGEST_MIN)) {
     const metaRef = db.collection('tempo_meta').doc('digest');
     const meta = (await metaRef.get()).data() || {};
     if (meta.lastSent !== today) {
