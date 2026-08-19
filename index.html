@@ -118,13 +118,16 @@ main{padding:6px 18px calc(var(--nav-h) + 34px) 18px}
 .dot.high{background:var(--accent)} .dot.med{background:var(--warn)} .dot.low{background:var(--blue)}
 .pill{display:inline-flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--line);
   padding:2px 8px;border-radius:7px;font-size:11.5px;font-weight:600;color:var(--txt2)}
-.row .grip{opacity:0;position:absolute;right:12px;top:14px;color:var(--txt3)}
-.reord{display:flex;flex-direction:column;gap:1px;flex:none;align-self:center;margin-left:6px}
-.reord button{width:32px;height:26px;display:grid;place-items:center;color:var(--txt3);border-radius:8px}
-.reord button:active{background:var(--surface2);color:var(--txt)}
-.reord button:disabled{opacity:.22;pointer-events:none}
-.reord svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2.4}
-@media(hover:hover){.row:hover{background:var(--surface2)}.row:hover .grip{opacity:1}.reord button:hover{color:var(--txt)}.iconbtn:hover{border-color:var(--line2)}}
+.drag{flex:none;align-self:center;display:grid;place-items:center;width:36px;height:40px;margin-left:2px;
+  color:var(--line2);touch-action:none;cursor:grab;-webkit-user-select:none;user-select:none}
+.drag:active{cursor:grabbing}
+.drag svg{width:20px;height:20px;fill:currentColor;stroke:none}
+.row.dragging{background:var(--surface);box-shadow:0 14px 30px -10px rgba(30,25,20,.35);border-radius:14px;
+  border-bottom-color:transparent;z-index:30;position:relative}
+.row.dragging .drag{color:var(--txt2);cursor:grabbing}
+.list.reordering{position:relative}
+.list.reordering .row:not(.dragging){transition:transform .16s var(--ease)}
+@media(hover:hover){.row:hover{background:var(--surface2)}.row:hover .drag{color:var(--txt3)}.iconbtn:hover{border-color:var(--line2)}}
 
 /* ---------- Chips / filters ---------- */
 .chiprow{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;scrollbar-width:none;margin:0 -16px;padding-left:16px;padding-right:16px}
@@ -557,8 +560,7 @@ const IC = {
   trash:'<path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" stroke-linecap="round" stroke-linejoin="round"/>',
   cl:'<path d="M15 5l-7 7 7 7" stroke-linecap="round" stroke-linejoin="round"/>',
   cr:'<path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/>',
-  cu:'<path d="M6 15l6-6 6 6" stroke-linecap="round" stroke-linejoin="round"/>',
-  cd:'<path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/>',
+  grip:'<circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/>',
   search:'<circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21" stroke-linecap="round"/>',
   cal:'<rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4" stroke-linecap="round"/>',
   file:'<path d="M13 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V9z" stroke-linejoin="round"/><path d="M13 3v6h6" stroke-linejoin="round"/>',
@@ -981,27 +983,73 @@ function ensureOrders(){
   Object.entries(byDay).forEach(([k,arr])=>{ arr.sort(oldSortKey); let base=(maxByDay[k]??-1); arr.forEach(t=>{ base+=1; t.order=base; changed=true; }); });
   if(changed) save();
 }
-// sposta un task su/giù tra i task aperti dello STESSO giorno
-function moveTask(id,dir){
-  const t=getTask(id); if(!t||t.done)return;
-  const grp=tasks.filter(x=>!x.done && (x.date||'')===(t.date||''))
-                 .sort((a,b)=>((a.order??1e9)-(b.order??1e9))||((a.createdAt||0)-(b.createdAt||0)));
-  const i=grp.findIndex(x=>x.id===id); if(i<0)return;
-  const j=dir<0?i-1:i+1; if(j<0||j>=grp.length)return;
-  const A=grp[i], B=grp[j];
-  const ao=A.order, bo=B.order; A.order=bo; B.order=ao;
-  A.updatedAt=Date.now(); B.updatedAt=Date.now(); save();
-  reconcile(A); reconcile(B);
-  render();
-}
-// rende una lista di task APERTI con le frecce su/giù (attive solo tra task dello stesso giorno)
+// rende una lista di task APERTI: mostra la maniglia di trascinamento solo se c'è almeno
+// un altro task nello stesso giorno (altrimenti non c'è nulla da riordinare)
 function openListHTML(arr){
-  return arr.map((t,i)=>{
-    const up   = i>0            && (arr[i-1].date||'')===(t.date||'');
-    const down = i<arr.length-1 && (arr[i+1].date||'')===(t.date||'');
-    return rowHTML(t,{up,down});
+  return arr.map(t=>{
+    const sib = arr.some(o=>o!==t && (o.date||'')===(t.date||''));
+    return rowHTML(t,{drag:sib});
   }).join('');
 }
+
+/* ---- Trascinamento task (riordino manuale entro lo stesso giorno) ---- */
+let drag=null;
+function startDrag(e, handle){
+  if(e.button!=null && e.button>0) return;               // solo tasto sinistro / tocco
+  const row=handle.closest('.row'); const list=row&&row.closest('.list');
+  if(!row||!list) return;
+  const t=getTask(row.dataset.id); if(!t||t.done) return;
+  // gruppo = righe contigue nello stesso .list con stessa data e non completate
+  const rows=[...list.children].filter(el=>el.classList&&el.classList.contains('row'));
+  const same=el=>{ const x=getTask(el.dataset.id); return x&&!x.done&&(x.date||'')===(t.date||''); };
+  let i=rows.indexOf(row), lo=i, hi=i;
+  while(lo-1>=0 && same(rows[lo-1])) lo--;
+  while(hi+1<rows.length && same(rows[hi+1])) hi++;
+  const group=rows.slice(lo,hi+1);
+  if(group.length<2) return;                              // niente da riordinare
+  e.preventDefault();
+  drag={ row, list, group, pointerId:e.pointerId, startY:e.clientY };
+  try{ row.setPointerCapture(e.pointerId); }catch(_){}
+  row.classList.add('dragging'); list.classList.add('reordering');
+  document.addEventListener('pointermove', onDragMove, {passive:false});
+  document.addEventListener('pointerup', endDrag);
+  document.addEventListener('pointercancel', endDrag);
+}
+function onDragMove(e){
+  if(!drag) return;
+  e.preventDefault();
+  const move=()=>{ drag.row.style.transform=`translateY(${e.clientY-drag.startY}px)`; };
+  move();
+  const r=drag.row.getBoundingClientRect(); const mid=r.top+r.height/2;
+  const prev=drag.row.previousElementSibling;
+  if(prev && drag.group.includes(prev)){
+    const pr=prev.getBoundingClientRect();
+    if(mid < pr.top+pr.height/2){ drag.list.insertBefore(drag.row, prev); drag.startY+=pr.height; move(); return; }
+  }
+  const next=drag.row.nextElementSibling;
+  if(next && drag.group.includes(next)){
+    const nr=next.getBoundingClientRect();
+    if(mid > nr.top+nr.height/2){ drag.list.insertBefore(next, drag.row); drag.startY-=nr.height; move(); }
+  }
+}
+function endDrag(){
+  if(!drag) return;
+  document.removeEventListener('pointermove', onDragMove);
+  document.removeEventListener('pointerup', endDrag);
+  document.removeEventListener('pointercancel', endDrag);
+  const { row, list, group }=drag; const pid=drag.pointerId;
+  try{ row.releasePointerCapture(pid); }catch(_){}
+  row.classList.remove('dragging'); list.classList.remove('reordering'); row.style.transform='';
+  // nuova sequenza (ordine DOM) → riassegno i valori di order del gruppo
+  const seq=[...list.children].filter(el=>el.classList&&el.classList.contains('row')&&group.includes(el)).map(el=>el.dataset.id);
+  const vals=seq.map(id=>{ const t=getTask(id); return (typeof t.order==='number')?t.order:0; }).sort((a,b)=>a-b);
+  const changed=[];
+  seq.forEach((id,i)=>{ const t=getTask(id); if(t && t.order!==vals[i]){ t.order=vals[i]; t.updatedAt=Date.now(); changed.push(t); } });
+  drag=null;
+  if(changed.length){ save(); changed.forEach(reconcile); }
+  render();
+}
+document.addEventListener('pointerdown', e=>{ const h=e.target.closest && e.target.closest('[data-act=drag]'); if(h) startDrag(e,h); });
 function rowHTML(t, mv){
   const p = t.priority && PRI[t.priority];
   const meta=[];
@@ -1021,16 +1069,13 @@ function rowHTML(t, mv){
   if(t.phone) meta.push(`<span class="m">${svg('phone')}</span>`);
   if(t.notes) meta.push(`<span class="m">${svg('note')}</span>`);
   const pcls = t.priority?`pri-${t.priority}`:'';
-  const reord = (mv && !t.done && (mv.up||mv.down)) ? `<div class="reord">
-        <button data-act="mv-up" data-id="${t.id}" ${mv.up?'':'disabled'} aria-label="Sposta su">${svg('cu')}</button>
-        <button data-act="mv-down" data-id="${t.id}" ${mv.down?'':'disabled'} aria-label="Sposta giù">${svg('cd')}</button>
-      </div>` : '';
+  const handle = (mv && mv.drag && !t.done) ? `<button class="drag" data-act="drag" data-id="${t.id}" aria-label="Trascina per riordinare">${svg('grip')}</button>` : '';
   return `<div class="row ${t.done?'done':''}" data-act="open" data-id="${t.id}">
       <button class="ck ${pcls}" data-act="toggle" data-id="${t.id}" aria-label="Completa">${svg('check')}</button>
       <div class="body">
         <div class="ttl">${esc(t.title)||'<span class="dim">Senza titolo</span>'}</div>
         ${meta.length?`<div class="meta">${meta.join('')}</div>`:''}
-      </div>${reord}
+      </div>${handle}
     </div>`;
 }
 function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -1271,8 +1316,7 @@ document.addEventListener('click',e=>{
     setTimeout(()=>{ render(); if(allDoneNow) toast('Tutto fatto per oggi 🎉'); },160);
     return; }
 
-  if(a==='mv-up'){ e.stopPropagation(); moveTask(el.dataset.id,-1); return; }
-  if(a==='mv-down'){ e.stopPropagation(); moveTask(el.dataset.id,1); return; }
+  if(a==='drag'){ return; }   // gestita via pointer events, il tocco non apre il task
 
   if(a==='open'){ openSheet(el.dataset.id); return; }
 
