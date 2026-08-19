@@ -60,13 +60,13 @@ h2{font-size:18px;font-weight:800;letter-spacing:-.01em}
 .logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--accent-hi),var(--accent-deep));
   display:grid;place-items:center;box-shadow:0 6px 16px -4px rgba(255,90,60,.5);flex:none}
 .logo svg{width:19px;height:19px;stroke:#fff;fill:none;stroke-width:2.4}
-.brand b{font-weight:800;letter-spacing:.02em;font-size:19px}
+.brand b{font-family:var(--disp);font-weight:500;letter-spacing:0;font-size:23px}
 .brand b span{color:var(--accent)}
 .iconbtn{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--surface);
   border:1px solid var(--line);color:var(--txt2);box-shadow:var(--sh)}
 .iconbtn svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2}
 
-main{padding:2px 16px calc(var(--nav-h) + 34px) 16px}
+main{padding:6px 18px calc(var(--nav-h) + 34px) 18px}
 .view>*{animation:riseIn .5s var(--ease) both}
 .view>*:nth-child(2){animation-delay:.04s}.view>*:nth-child(3){animation-delay:.08s}
 .view>*:nth-child(4){animation-delay:.12s}.view>*:nth-child(5){animation-delay:.16s}
@@ -75,7 +75,7 @@ main{padding:2px 16px calc(var(--nav-h) + 34px) 16px}
 /* ---------- Hero (Oggi) ---------- */
 .hero{padding:8px 4px 4px}
 .hero .day{font-family:var(--disp);font-size:15px;font-weight:500;color:var(--accent);text-transform:capitalize;font-style:italic}
-.hero .big{font-family:var(--disp);font-weight:400;font-size:46px;line-height:1;letter-spacing:-.01em;margin-top:5px;color:var(--txt)}
+.hero .big{font-family:var(--disp);font-weight:400;font-size:52px;line-height:.98;letter-spacing:-.01em;margin-top:6px;color:var(--txt)}
 .hero .sub{margin-top:12px;color:var(--txt2);font-size:14px;font-weight:500}
 .hero .sub b{color:var(--txt)}
 .pbar{height:8px;border-radius:99px;background:var(--surface2);border:1px solid var(--line);margin-top:14px;overflow:hidden}
@@ -90,15 +90,17 @@ main{padding:2px 16px calc(var(--nav-h) + 34px) 16px}
 .qadd .go svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2.6}
 
 /* ---------- Section header ---------- */
-.sec-h{display:flex;align-items:center;justify-content:space-between;margin:26px 4px 12px}
+.sec-h{display:flex;align-items:center;justify-content:space-between;margin:34px 6px 10px}
 .sec-h .cnt{font-size:12px;font-weight:700;color:var(--txt3);background:var(--surface2);border:1px solid var(--line);
   padding:2px 9px;border-radius:99px}
 
 /* ---------- Task row ---------- */
-.list{display:flex;flex-direction:column;gap:9px}
-.row{display:flex;gap:13px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);
-  border-radius:var(--r);padding:13px 14px;box-shadow:var(--sh);width:100%;text-align:left;position:relative}
-.row.done{background:var(--surface2);box-shadow:none;border-color:var(--line)}
+.list{display:flex;flex-direction:column;gap:0}
+.row{display:flex;gap:14px;align-items:flex-start;background:transparent;border:none;border-bottom:1px solid var(--line);
+  border-radius:0;padding:16px 6px;box-shadow:none;width:100%;text-align:left;position:relative}
+.list .row:last-child{border-bottom:none}
+.row:active{background:var(--surface2)}
+.row.done{background:transparent}
 .ck{width:24px;height:24px;border-radius:6px;border:1.5px solid var(--line2);flex:none;margin-top:1px;
   display:grid;place-items:center;background:var(--surface);transition:transform .2s var(--ease),background .2s,border-color .2s}
 .ck svg{width:13px;height:13px;stroke:#fff;fill:none;stroke-width:3.2;opacity:0;transform:scale(.4);transition:.2s var(--ease)}
@@ -117,7 +119,7 @@ main{padding:2px 16px calc(var(--nav-h) + 34px) 16px}
 .pill{display:inline-flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--line);
   padding:2px 8px;border-radius:7px;font-size:11.5px;font-weight:600;color:var(--txt2)}
 .row .grip{opacity:0;position:absolute;right:12px;top:14px;color:var(--txt3)}
-@media(hover:hover){.row:hover{border-color:var(--line2)}.row:hover .grip{opacity:1}.iconbtn:hover{border-color:var(--line2)}}
+@media(hover:hover){.row:hover{background:var(--surface2)}.row:hover .grip{opacity:1}.iconbtn:hover{border-color:var(--line2)}}
 
 /* ---------- Chips / filters ---------- */
 .chiprow{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;scrollbar-width:none;margin:0 -16px;padding-left:16px;padding-right:16px}
@@ -787,8 +789,8 @@ function rowHTML(t){
   }
   if(p) meta.push(`<span class="m"><span class="dot ${p.c}"></span>${p.l}</span>`);
   const cat=getCat(t.catId);
-  if(cat){ const sub=getSub(cat,t.subId); meta.push(`<span class="pill" style="color:${cat.color};border-color:${cat.color}40;background:${cat.color}14"><span class="dot" style="background:${cat.color}"></span>${esc(cat.name)}${sub?' · '+esc(sub.name):''}</span>`); }
-  else if(t.list) meta.push(`<span class="pill">${svg('tag')}${esc(t.list)}</span>`);
+  if(cat){ const sub=getSub(cat,t.subId); meta.push(`<span class="m"><span class="dot" style="background:${cat.color}"></span>${esc(cat.name)}${sub?' · '+esc(sub.name):''}</span>`); }
+  else if(t.list) meta.push(`<span class="m">${svg('tag')}${esc(t.list)}</span>`);
   if(t.attachments&&t.attachments.length) meta.push(`<span class="m">${svg('clip')}${t.attachments.length}</span>`);
   const subDone = t.subtasks? t.subtasks.filter(s=>s.done).length:0;
   if(t.subtasks&&t.subtasks.length) meta.push(`<span class="m">${svg('check')}${subDone}/${t.subtasks.length}</span>`);
