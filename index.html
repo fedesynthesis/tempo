@@ -516,6 +516,7 @@ body.paper.rough-ready .row.done .ck::after,body.paper.rough-ready .sub.done .sc
   <div class="sheetfoot" id="scrfoot"></div>
 </section>
 <input type="file" id="scrpick" accept="image/*" capture="environment" hidden>
+<input type="file" id="scrpicklib" accept="image/*" hidden>
 
 <div class="viewer" id="viewer">
   <div class="vbar">
@@ -928,12 +929,15 @@ function renderScrForm(){
 }
 function renderScrPhoto(){
   const el=$('#scrphoto'); if(!el)return; const s=scrEdit;
+  const btns=`<div style="display:flex;gap:10px;margin-top:8px">
+    <button class="attadd" data-act="scr-photo" style="flex:1;margin-top:0">${svg('img')} Scatta foto</button>
+    <button class="attadd" data-act="scr-photo-lib" style="flex:1;margin-top:0">${svg('folder')} Seleziona</button>
+  </div>`;
   if(s.photoId){
-    el.innerHTML=`<button class="scrbig" data-act="scr-viewphoto" id="scrbig"><span class="dim">…</span></button>
-      <div style="display:flex;gap:14px;margin-top:8px;align-items:center"><button class="attadd" data-act="scr-photo" style="flex:1;margin-top:0">${svg('img')} Sostituisci</button><button class="wizlink" data-act="scr-delphoto">Rimuovi</button></div>`;
+    el.innerHTML=`<button class="scrbig" data-act="scr-viewphoto" id="scrbig"><span class="dim">…</span></button>${btns}<button class="wizlink" data-act="scr-delphoto" style="margin-top:6px">Rimuovi foto</button>`;
     fileGet(s.photoId).then(rec=>{ if(rec){ const url=URL.createObjectURL(rec.blob); const b=$('#scrbig'); if(b) b.innerHTML=`<img src="${url}" alt="">`; } });
   } else {
-    el.innerHTML=`<button class="attadd" data-act="scr-photo">${svg('img')} Scatta foto</button>`;
+    el.innerHTML=btns;
   }
 }
 
@@ -1192,6 +1196,7 @@ document.addEventListener('click',e=>{
   if(a==='scr-save'){ closeScritta(true); return; }
   if(a==='scr-del'){ scrDelete(); return; }
   if(a==='scr-photo'){ const fp=$('#scrpick'); fp.value=''; fp.click(); return; }
+  if(a==='scr-photo-lib'){ const fp=$('#scrpicklib'); fp.value=''; fp.click(); return; }
   if(a==='scr-delphoto'){ if(scrEdit){ if(scrEdit.photoId&&scrEdit.photoId!==_scrOrig) fileDel(scrEdit.photoId); scrEdit.photoId=null; renderScrPhoto(); } return; }
   if(a==='scr-viewphoto'){ if(scrEdit&&scrEdit.photoId) openAttachment(scrEdit.photoId); return; }
   if(a==='wiz-cancel'){ wizCancel(); return; }
@@ -1323,13 +1328,15 @@ $('#filepick').addEventListener('change',async e=>{
   if(wiz){ renderWizAtts(); } else { touch(t); renderAtts(); }
 });
 
-/* fotocamera scritte */
-$('#scrpick').addEventListener('change',async e=>{
+/* foto scritte (fotocamera + libreria) */
+async function scrSavePhoto(e){
   const f=e.target.files[0]; if(!f||!scrEdit){return;}
   const aid=uid();
   try{ await fileSave(aid,f); if(scrEdit.photoId && scrEdit.photoId!==_scrOrig) fileDel(scrEdit.photoId); scrEdit.photoId=aid; renderScrPhoto(); }
   catch(err){ toast('Foto non salvata'); }
-});
+}
+$('#scrpick').addEventListener('change', scrSavePhoto);
+$('#scrpicklib').addEventListener('change', scrSavePhoto);
 /* ---- Visualizzatore allegati IN-APP (immagini, PDF, testo) ---- */
 let _viewer={url:null, rec:null};
 let _pdfjs=null;
