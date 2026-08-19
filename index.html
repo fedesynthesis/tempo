@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#f6f6f3">
+<meta name="theme-color" content="#f4f2ea">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>TEMPO — Task & Calendario</title>
@@ -18,18 +18,18 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{
-  --bg:#f6f6f3; --bg2:#efefe9; --surface:#ffffff; --surface2:#f4f4f0;
-  --line:#e9e9e2; --line2:#deded4;
-  --txt:#191a1c; --txt2:#6c6d72; --txt3:#9c9da2;
-  --accent:#ff5a3c; --accent-deep:#e8482c; --accent-hi:#ff7a5c; --accent-soft:rgba(255,90,60,.10);
-  --ok:#1aa568; --ok-soft:rgba(26,165,104,.13);
-  --warn:#f0a01e; --blue:#4c6ef5; --danger:#e5484d;
+  --bg:#f4f2ea; --bg2:#ece9df; --surface:#fdfcf8; --surface2:#f2efe6;
+  --line:#e6e2d6; --line2:#d8d3c4;
+  --txt:#201c17; --txt2:#79736a; --txt3:#a79f93;
+  --accent:#b8492c; --accent-deep:#9c3c22; --accent-hi:#cc5a3b; --accent-soft:rgba(184,73,44,.09);
+  --ok:#3f7a4a; --ok-soft:rgba(63,122,74,.13);
+  --warn:#c0801a; --blue:#3b5c9f; --danger:#c0392b;
   --font:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
   --disp:'Fraunces',Georgia,'Times New Roman',serif;
   --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
   --r:16px; --r-s:11px; --r-l:22px;
-  --sh:0 1px 2px rgba(20,20,25,.05),0 8px 22px -12px rgba(20,20,25,.14);
-  --sh-lg:0 12px 46px -10px rgba(20,20,25,.28);
+  --sh:0 1px 2px rgba(40,28,20,.04),0 6px 18px -14px rgba(40,28,20,.12);
+  --sh-lg:0 14px 46px -12px rgba(40,28,20,.26);
   --nav-h:64px;
   --ease:cubic-bezier(.22,1,.36,1);
 }
@@ -49,7 +49,7 @@ input,select,textarea{font-family:inherit;font-size:16px;color:inherit}
 .muted{color:var(--txt2)} .dim{color:var(--txt3)}
 h1{font-size:26px;font-weight:800;letter-spacing:-.02em;line-height:1.08}
 h2{font-size:18px;font-weight:800;letter-spacing:-.01em}
-.eyebrow{font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--txt3);font-weight:700}
+.eyebrow{font-family:var(--disp);font-style:italic;font-size:15px;letter-spacing:0;text-transform:none;color:var(--accent);font-weight:500}
 .chiprow{touch-action:pan-x}
 
 /* ---------- Topbar ---------- */
@@ -75,7 +75,7 @@ main{padding:2px 16px calc(var(--nav-h) + 34px) 16px}
 /* ---------- Hero (Oggi) ---------- */
 .hero{padding:8px 4px 4px}
 .hero .day{font-family:var(--disp);font-size:15px;font-weight:500;color:var(--accent);text-transform:capitalize;font-style:italic}
-.hero .big{font-family:var(--disp);font-weight:500;font-size:42px;line-height:1;letter-spacing:-.01em;margin-top:4px;color:var(--txt)}
+.hero .big{font-family:var(--disp);font-weight:400;font-size:46px;line-height:1;letter-spacing:-.01em;margin-top:5px;color:var(--txt)}
 .hero .sub{margin-top:12px;color:var(--txt2);font-size:14px;font-weight:500}
 .hero .sub b{color:var(--txt)}
 .pbar{height:8px;border-radius:99px;background:var(--surface2);border:1px solid var(--line);margin-top:14px;overflow:hidden}
@@ -99,10 +99,10 @@ main{padding:2px 16px calc(var(--nav-h) + 34px) 16px}
 .row{display:flex;gap:13px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);
   border-radius:var(--r);padding:13px 14px;box-shadow:var(--sh);width:100%;text-align:left;position:relative}
 .row.done{background:var(--surface2);box-shadow:none;border-color:var(--line)}
-.ck{width:24px;height:24px;border-radius:50%;border:2px solid var(--line2);flex:none;margin-top:1px;
+.ck{width:24px;height:24px;border-radius:6px;border:1.5px solid var(--line2);flex:none;margin-top:1px;
   display:grid;place-items:center;background:var(--surface);transition:transform .2s var(--ease),background .2s,border-color .2s}
 .ck svg{width:13px;height:13px;stroke:#fff;fill:none;stroke-width:3.2;opacity:0;transform:scale(.4);transition:.2s var(--ease)}
-.row.done .ck{background:var(--ok);border-color:var(--ok)}
+.row.done .ck{background:var(--txt);border-color:var(--txt)}
 .row.done .ck svg{opacity:1;transform:scale(1)}
 .ck.pri-high{border-color:var(--accent)} .ck.pri-med{border-color:var(--warn)} .ck.pri-low{border-color:var(--blue)}
 .row .body{flex:1;min-width:0}
@@ -259,9 +259,9 @@ input[type=date].inp,input[type=time].inp{-webkit-appearance:none;appearance:non
 /* subtasks */
 .subs{display:flex;flex-direction:column;gap:7px}
 .sub{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-s);padding:9px 11px;box-shadow:var(--sh)}
-.sub .sck{width:20px;height:20px;border-radius:50%;border:2px solid var(--line2);flex:none;display:grid;place-items:center;background:var(--surface)}
+.sub .sck{width:20px;height:20px;border-radius:5px;border:1.5px solid var(--line2);flex:none;display:grid;place-items:center;background:var(--surface)}
 .sub .sck svg{width:11px;height:11px;stroke:#fff;fill:none;stroke-width:3.4;opacity:0}
-.sub.done .sck{background:var(--ok);border-color:var(--ok)}
+.sub.done .sck{background:var(--txt);border-color:var(--txt)}
 .sub.done .sck svg{opacity:1}
 .sub .st{flex:1;font-size:14px;font-weight:500}
 .sub.done .st{color:var(--txt3);text-decoration:line-through}
