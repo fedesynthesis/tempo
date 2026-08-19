@@ -330,26 +330,24 @@ input[type=date].inp,input[type=time].inp{-webkit-appearance:none;appearance:non
 .pop{animation:pop .36s var(--ease)}
 /* ---------- Tema "taccuino" (attivabile) ---------- */
 body.paper{
-  --bg:#f3ead4; --bg2:#eee2c8; --surface:#fffdf4; --surface2:#f6efdb;
-  --line:#e0d3b2; --line2:#cfbd93;
-  --txt:#3b3327; --txt2:#786d58; --txt3:#a99b7e;
-  --accent:#c0442e; --accent-deep:#a5371f; --accent-hi:#d4563b; --accent-soft:rgba(192,68,46,.12);
+  --bg:#fcfcfb; --bg2:#f3f3f1; --surface:#ffffff; --surface2:#f6f6f4;
+  --line:#e6e6e2; --line2:#d7d7d1;
+  --txt:#33302a; --txt2:#76736c; --txt3:#a9a69e;
+  --accent:#c0442e; --accent-deep:#a5371f; --accent-hi:#d4563b; --accent-soft:rgba(192,68,46,.10);
   --blue:#3b5c9f; --ok:#4b7a3f; --warn:#c98a1e;
   --disp:'Caveat','Fraunces',cursive;
   background-color:var(--bg);
   background-image:
-    linear-gradient(rgba(60,80,140,.15) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(60,80,140,.15) 1px, transparent 1px),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.3'/%3E%3C/svg%3E");
-  background-size:24px 24px, 24px 24px, 150px 150px;
-  background-blend-mode:multiply, multiply, multiply;
+    linear-gradient(rgba(0,0,0,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,.05) 1px, transparent 1px);
+  background-size:24px 24px, 24px 24px;
 }
 body.paper #root{background:transparent;box-shadow:none}
 body.paper main{background:transparent}
 /* riquadri a quadretti (task e schede) */
 body.paper .card,body.paper .row,body.paper .qadd,body.paper .search,body.paper .calcard,body.paper .catmng{
   background-color:var(--surface);
-  background-image:linear-gradient(rgba(60,80,140,.11) 1px,transparent 1px),linear-gradient(90deg,rgba(60,80,140,.11) 1px,transparent 1px);
+  background-image:linear-gradient(rgba(0,0,0,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.04) 1px,transparent 1px);
   background-size:22px 22px,22px 22px;
 }
 body.paper .topbar{background:linear-gradient(var(--bg) 72%,rgba(243,234,212,0))}
