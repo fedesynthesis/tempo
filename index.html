@@ -122,11 +122,6 @@ main{padding:6px 18px calc(var(--nav-h) + 34px) 18px}
   color:var(--line2);touch-action:none;cursor:grab;-webkit-user-select:none;user-select:none}
 .drag:active{cursor:grabbing}
 .drag svg{width:20px;height:20px;fill:currentColor;stroke:none}
-.row.dragging{background:var(--surface);box-shadow:0 14px 30px -10px rgba(30,25,20,.35);border-radius:14px;
-  border-bottom-color:transparent;z-index:30;position:relative}
-.row.dragging .drag{color:var(--txt2);cursor:grabbing}
-.list.reordering{position:relative}
-.list.reordering .row:not(.dragging){transition:transform .16s var(--ease)}
 @media(hover:hover){.row:hover{background:var(--surface2)}.row:hover .drag{color:var(--txt3)}.iconbtn:hover{border-color:var(--line2)}}
 
 /* ---------- Chips / filters ---------- */
@@ -992,54 +987,112 @@ function openListHTML(arr){
   }).join('');
 }
 
-/* ---- Trascinamento task (riordino manuale entro lo stesso giorno) ---- */
+/* ---- Trascinamento task: riordino FLUIDO (metodo di Migross, con FLIP) ----
+   Il segreto contro gli "scatti": le righe non trascinate scivolano con animazione
+   FLIP; la riga trascinata segue il dito 1:1 (transition:none) con un accumulatore
+   `shift` che compensa i riordini; i movimenti sono throttlati con requestAnimationFrame. */
 let drag=null;
-function startDrag(e, handle){
-  if(e.button!=null && e.button>0) return;               // solo tasto sinistro / tocco
+function dragY(e){ return (e.touches&&e.touches[0])?e.touches[0].clientY:e.clientY; }
+
+function dragDown(e){
+  const handle = e.target.closest ? e.target.closest('[data-act=drag]') : null;
+  if(!handle) return;
   const row=handle.closest('.row'); const list=row&&row.closest('.list');
   if(!row||!list) return;
   const t=getTask(row.dataset.id); if(!t||t.done) return;
   // gruppo = righe contigue nello stesso .list con stessa data e non completate
-  const rows=[...list.children].filter(el=>el.classList&&el.classList.contains('row'));
+  const all=[...list.children].filter(el=>el.classList&&el.classList.contains('row'));
   const same=el=>{ const x=getTask(el.dataset.id); return x&&!x.done&&(x.date||'')===(t.date||''); };
-  let i=rows.indexOf(row), lo=i, hi=i;
-  while(lo-1>=0 && same(rows[lo-1])) lo--;
-  while(hi+1<rows.length && same(rows[hi+1])) hi++;
-  const group=rows.slice(lo,hi+1);
-  if(group.length<2) return;                              // niente da riordinare
-  e.preventDefault();
-  drag={ row, list, group, pointerId:e.pointerId, startY:e.clientY };
-  try{ row.setPointerCapture(e.pointerId); }catch(_){}
-  row.classList.add('dragging'); list.classList.add('reordering');
-  document.addEventListener('pointermove', onDragMove, {passive:false});
-  document.addEventListener('pointerup', endDrag);
-  document.addEventListener('pointercancel', endDrag);
+  let i=all.indexOf(row), lo=i, hi=i;
+  while(lo-1>=0 && same(all[lo-1])) lo--;
+  while(hi+1<all.length && same(all[hi+1])) hi++;
+  const group=all.slice(lo,hi+1);
+  if(group.length<2) return;                       // niente da riordinare
+  e.preventDefault(); e.stopPropagation();
+
+  drag={ row, list, group, start:dragY(e), shift:0, lastY:dragY(e), raf:0 };
+  row.style.transition='none';                     // segue il dito senza lag
+  row.style.zIndex='1000'; row.style.position='relative';
+  row.style.background='var(--surface)';
+  row.style.boxShadow='0 14px 30px -10px rgba(30,25,20,.35)';
+  row.style.borderRadius='14px';
+  row.style.borderBottomColor='transparent';
+  row.style.transform='scale(1.02)';
+  handle.style.cursor='grabbing';
+  document.body.style.userSelect='none';
+
+  document.addEventListener('mousemove', dragMove, {passive:false});
+  document.addEventListener('touchmove', dragMove, {passive:false});
+  document.addEventListener('mouseup', dragUp);
+  document.addEventListener('touchend', dragUp);
+  document.addEventListener('touchcancel', dragUp);
 }
-function onDragMove(e){
+
+// FLIP: anima lo scivolamento delle righe non trascinate (niente salti)
+function dragFlip(mutate){
+  const rows=[...drag.list.querySelectorAll('.row')];
+  const first=rows.map(r=>r.getBoundingClientRect().top);
+  mutate();
+  rows.forEach((r,i)=>{
+    if(r===drag.row) return;
+    const dy=first[i]-r.getBoundingClientRect().top;
+    if(!dy) return;
+    r.style.transition='none';
+    r.style.transform='translateY('+dy+'px)';
+    requestAnimationFrame(()=>{ r.style.transition='transform .18s cubic-bezier(.2,.7,.3,1)'; r.style.transform=''; });
+  });
+}
+
+function dragMove(e){
   if(!drag) return;
   e.preventDefault();
-  const move=()=>{ drag.row.style.transform=`translateY(${e.clientY-drag.startY}px)`; };
-  move();
-  const r=drag.row.getBoundingClientRect(); const mid=r.top+r.height/2;
-  const prev=drag.row.previousElementSibling;
-  if(prev && drag.group.includes(prev)){
-    const pr=prev.getBoundingClientRect();
-    if(mid < pr.top+pr.height/2){ drag.list.insertBefore(drag.row, prev); drag.startY+=pr.height; move(); return; }
-  }
-  const next=drag.row.nextElementSibling;
-  if(next && drag.group.includes(next)){
-    const nr=next.getBoundingClientRect();
-    if(mid > nr.top+nr.height/2){ drag.list.insertBefore(next, drag.row); drag.startY-=nr.height; move(); }
+  drag.lastY=dragY(e);
+  if(drag.raf) return;
+  drag.raf=requestAnimationFrame(dragApply);
+}
+
+function dragApply(){
+  if(!drag) return;
+  drag.raf=0;
+  drag.row.style.transform='translateY('+((drag.lastY-drag.start)-drag.shift)+'px) scale(1.02)';
+  // righe del gruppo in ordine DOM CORRENTE (come Migross: si ri-leggono ogni frame)
+  const rows=[...drag.list.children].filter(el=>el.classList&&el.classList.contains('row')&&drag.group.includes(el));
+  const idx=rows.indexOf(drag.row);
+  const dRect=drag.row.getBoundingClientRect();
+  const dMid=dRect.top+dRect.height/2;
+  for(let i=0;i<rows.length;i++){
+    const r=rows[i]; if(r===drag.row) continue;
+    const rRect=r.getBoundingClientRect();
+    const rMid=rRect.top+rRect.height/2;
+    if(i<idx && dMid<rMid){
+      const h=rRect.height;
+      dragFlip(()=>drag.list.insertBefore(drag.row, r));
+      drag.shift-=h;
+      drag.row.style.transform='translateY('+((drag.lastY-drag.start)-drag.shift)+'px) scale(1.02)';
+      break;
+    } else if(i>idx && dMid>rMid){
+      const h=rRect.height;
+      dragFlip(()=>drag.list.insertBefore(drag.row, r.nextSibling));
+      drag.shift+=h;
+      drag.row.style.transform='translateY('+((drag.lastY-drag.start)-drag.shift)+'px) scale(1.02)';
+      break;
+    }
   }
 }
-function endDrag(){
+
+function dragUp(){
   if(!drag) return;
-  document.removeEventListener('pointermove', onDragMove);
-  document.removeEventListener('pointerup', endDrag);
-  document.removeEventListener('pointercancel', endDrag);
-  const { row, list, group }=drag; const pid=drag.pointerId;
-  try{ row.releasePointerCapture(pid); }catch(_){}
-  row.classList.remove('dragging'); list.classList.remove('reordering'); row.style.transform='';
+  if(drag.raf){ cancelAnimationFrame(drag.raf); drag.raf=0; }
+  const { row, list, group }=drag;
+  document.removeEventListener('mousemove', dragMove);
+  document.removeEventListener('touchmove', dragMove);
+  document.removeEventListener('mouseup', dragUp);
+  document.removeEventListener('touchend', dragUp);
+  document.removeEventListener('touchcancel', dragUp);
+  document.body.style.userSelect='';
+  const handle=row.querySelector('.drag'); if(handle) handle.style.cursor='grab';
+  row.style.transform='';   // già in posizione finale nel DOM
+
   // nuova sequenza (ordine DOM) → riassegno i valori di order del gruppo
   const seq=[...list.children].filter(el=>el.classList&&el.classList.contains('row')&&group.includes(el)).map(el=>el.dataset.id);
   const vals=seq.map(id=>{ const t=getTask(id); return (typeof t.order==='number')?t.order:0; }).sort((a,b)=>a-b);
@@ -1047,9 +1100,15 @@ function endDrag(){
   seq.forEach((id,i)=>{ const t=getTask(id); if(t && t.order!==vals[i]){ t.order=vals[i]; t.updatedAt=Date.now(); changed.push(t); } });
   drag=null;
   if(changed.length){ save(); changed.forEach(reconcile); }
+  // il tap che segue il rilascio non deve aprire il task
+  const swallow=ev=>{ ev.stopPropagation(); ev.preventDefault(); document.removeEventListener('click',swallow,true); };
+  document.addEventListener('click',swallow,true);
+  setTimeout(()=>document.removeEventListener('click',swallow,true),350);
   render();
 }
-document.addEventListener('pointerdown', e=>{ const h=e.target.closest && e.target.closest('[data-act=drag]'); if(h) startDrag(e,h); });
+
+document.addEventListener('mousedown', dragDown);
+document.addEventListener('touchstart', dragDown, {passive:false});
 function rowHTML(t, mv){
   const p = t.priority && PRI[t.priority];
   const meta=[];
