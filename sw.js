@@ -1,9 +1,10 @@
 /* TEMPO service worker — app offline + cache font/animazioni + notifiche push */
-const CACHE='tempo-v6';
+const CACHE='tempo-v7';
 const CORE=['./','./index.html','./manifest.json','./icon.svg','./icon-180.png','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(CACHE).then(c=>{
     c.add('https://cdn.jsdelivr.net/npm/motion@13.1.0/dist/motion.js').catch(()=>{}); // best-effort
+    c.add('https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.esm.js').catch(()=>{}); // tema taccuino
     return c.addAll(CORE);
   }).then(()=>self.skipWaiting()));
 });
