@@ -387,6 +387,27 @@ body.paper.rough-ready .ck::before,body.paper.rough-ready .sub .sck::before{cont
 body.paper.rough-ready .ck svg,body.paper.rough-ready .sub .sck svg{display:none}
 body.paper.rough-ready .row.done .ck,body.paper.rough-ready .sub.done .sck{background:transparent}
 body.paper.rough-ready .row.done .ck::after,body.paper.rough-ready .sub.done .sck::after{content:"";position:absolute;inset:-5px;background:var(--rough-check) center/100% 100% no-repeat;pointer-events:none}
+/* ---------- Desktop / monitor (barra laterale) ---------- */
+@media (min-width:900px){
+  :root{--nav-h:0px}
+  #root{max-width:none;margin:0;padding-left:232px;box-shadow:none}
+  .topbar{padding:16px 30px;border-bottom:1px solid var(--line);background:var(--surface);backdrop-filter:none}
+  .brand b{font-size:24px}
+  /* nav in basso → barra laterale */
+  .nav{position:fixed;top:0;left:0;bottom:0;width:232px;max-width:none;margin:0;z-index:60;
+    display:flex;flex-direction:column;align-items:stretch;gap:4px;
+    background:var(--surface);border-top:none;border-right:1px solid var(--line);
+    padding:74px 14px 20px;backdrop-filter:none}
+  .nav button{flex-direction:row;justify-content:flex-start;gap:13px;padding:12px 14px;border-radius:12px;
+    font-size:15px;font-weight:600;letter-spacing:0;color:var(--txt2)}
+  .nav button svg{width:21px;height:21px}
+  .nav button.on{background:var(--accent-soft);color:var(--accent)}
+  .nav button.on::before{display:none}
+  main{max-width:920px;margin:0 auto;padding:20px 44px 72px}
+  .fab{position:fixed;left:auto;right:40px;bottom:32px;width:56px;height:56px}
+  .sheet{left:232px;right:0;max-width:600px}
+  .toast{left:calc(50% + 116px)}
+}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
