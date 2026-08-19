@@ -1,5 +1,5 @@
 /* TEMPO service worker — app offline + cache font/animazioni + notifiche push */
-const CACHE='tempo-v12';
+const CACHE='tempo-v13';
 const CORE=['./','./index.html','./manifest.json','./icon.svg','./icon-180.png','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(CACHE).then(c=>{

@@ -541,7 +541,7 @@ function loadCats(){
     {id:'personale',name:'Personale',color:'#9b5de5',subs:[]},
   ];
 }
-function saveCats(){ localStorage.setItem(CATKEY, JSON.stringify(cats)); }
+function saveCats(){ localStorage.setItem(CATKEY, JSON.stringify(cats)); if(!_applyingCats && window.fb && window.fb.ready){ _catsUpdatedAt=Date.now(); window.fb.syncCats(cats); } }
 function getCat(id){ return cats.find(c=>c.id===id)||null; }
 function getSub(cat,id){ return cat ? (cat.subs||[]).find(s=>s.id===id)||null : null; }
 function addCat(name){ name=(name||'').trim(); if(!name) return null; const c={id:uid(),name,color:CATPAL[cats.length%CATPAL.length],subs:[]}; cats.push(c); saveCats(); return c; }
@@ -1017,8 +1017,8 @@ document.addEventListener('click',e=>{
 document.addEventListener('submit',e=>{
   if(e.target.dataset.act==='qadd-form'){ e.preventDefault();
     const inp=$('#qadd'); const v=inp.value.trim(); if(!v)return;
-    const t={id:uid(),title:v,notes:'',done:false,date:todayStr(),time:null,priority:null,list:'',subtasks:[],attachments:[],createdAt:Date.now(),updatedAt:Date.now()};
-    tasks.unshift(t); save(); inp.value=''; renderToday();
+    const t={id:uid(),title:v,notes:'',done:false,date:todayStr(),time:null,priority:null,list:'',catId:null,subId:null,phone:'',subtasks:[],attachments:[],createdAt:Date.now(),updatedAt:Date.now()};
+    tasks.unshift(t); save(); reconcile(t); inp.value=''; renderToday();
     const first=main.querySelector('.list .row'); if(first&&M){try{M.animate(first,{opacity:[0,1],y:[-8,0]},{duration:.3});}catch(e){}}
   }
 });
@@ -1191,7 +1191,48 @@ function tryImport(){
 /* ============ Firebase reminder hooks (no-op finché non configuri le chiavi) ============ */
 function reconcile(t){ try{ if(t && window.fb && window.fb.ready) window.fb.syncTask(t); }catch(e){} }
 function reconcileRemove(id){ try{ if(window.fb && window.fb.ready) window.fb.removeTask(id); }catch(e){} }
-document.addEventListener('fb-ready',()=>{ try{ tasks.forEach(reconcile); }catch(e){} });
+
+/* ---- Sync multi-dispositivo: merge dei dati remoti (last-write-wins) ---- */
+let _syncedIds = new Set();
+let _catsUpdatedAt = 0;
+let _applyingCats = false;
+function applyRemoteTasks(remote){
+  try{
+    const remoteById = new Map(remote.filter(t=>t&&t.id).map(t=>[t.id, t]));
+    const byId = new Map(tasks.map(t=>[t.id, t]));
+    let changed=false;
+    remoteById.forEach((r,id)=>{
+      const l = byId.get(id);
+      if(!l || (r.updatedAt||0) > (l.updatedAt||0)){ byId.set(id, r); changed=true; }
+      _syncedIds.add(id);
+    });
+    for(const id of [...byId.keys()]){
+      if(!remoteById.has(id) && _syncedIds.has(id)){ byId.delete(id); changed=true; }
+    }
+    tasks.forEach(l=>{ if(l.id && !remoteById.has(l.id) && !_syncedIds.has(l.id)) reconcile(l); }); // carico i locali nuovi
+    if(changed){
+      tasks = [...byId.values()];
+      save();
+      if(!document.getElementById('sheet').classList.contains('on')) render();
+    }
+  }catch(e){ console.warn('applyRemoteTasks', e); }
+}
+function applyRemoteCats(list){
+  try{
+    const byId=new Map(cats.map(c=>[c.id,c]));
+    let changed=false;
+    (list||[]).forEach(rc=>{ if(rc&&rc.id&&!byId.has(rc.id)){ byId.set(rc.id, rc); changed=true; } });
+    if(changed){ _applyingCats=true; cats=[...byId.values()]; localStorage.setItem(CATKEY,JSON.stringify(cats)); _applyingCats=false; if(state.view==='tasks') renderTasks(); }
+  }catch(e){ console.warn('applyRemoteCats', e); }
+}
+document.addEventListener('fb-ready',()=>{
+  try{
+    if(window.fb.startSync){
+      window.fb.startSync(applyRemoteTasks, applyRemoteCats);
+      window.fb.syncCats && window.fb.syncCats(cats);
+    } else { tasks.forEach(reconcile); }
+  }catch(e){}
+});
 async function notifEnable(){
   if(!window.fb || !window.fb.ready){ toast('Prima configura Firebase (vedi SETUP-notifiche.md)'); return; }
   toast('Attivazione notifiche…');
@@ -1219,14 +1260,14 @@ const firebaseConfig = {
 };
 const VAPID_KEY = "BLMnmXBDgFt8Xok8ddgmG_eA6ZM3_bvmWpFl3_464k9Quu6KQ8HjSxag2xufbl5_iUohhsOMbG7F7boM7ws-TTc"; // Web Push certificate (tempo-1580f)
 
-window.fb = { ready:false, syncTask(){}, removeTask(){}, enableNotifications: async()=>({ok:false,reason:'Firebase non configurato'}) };
+window.fb = { ready:false, syncTask(){}, removeTask(){}, syncCats(){}, startSync(){}, enableNotifications: async()=>({ok:false,reason:'Firebase non configurato'}) };
 
 const configured = !Object.values(firebaseConfig).some(v=>String(v).includes('INCOLLA_QUI')) && !VAPID_KEY.includes('INCOLLA_QUI');
 if(configured){
   try{
     const V='10.12.2';
     const { initializeApp } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
-    const { getFirestore, doc, setDoc, deleteDoc, serverTimestamp } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
+    const { getFirestore, doc, setDoc, deleteDoc, collection, onSnapshot } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
     const { getMessaging, getToken, isSupported } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-messaging.js`);
     const app = initializeApp(firebaseConfig);
     const db  = getFirestore(app);
@@ -1235,19 +1276,31 @@ if(configured){
 
     window.fb.ready = true;
 
-    // Sincronizza su Firestore ogni task con una DATA (per il digest) e con ORARIO (per l'alert puntuale).
+    // Scrive il task COMPLETO su Firestore (sync multi-dispositivo) + i campi per le notifiche (dueAt/remindedAt).
     window.fb.syncTask = async (t)=>{
+      if(!t || !t.id) return;
       try{
-        if(!t || !t.date || t.done){ if(t&&t.id) await deleteDoc(doc(db,'tempo_tasks',t.id)).catch(()=>{}); return; }
-        const dueAt = t.time ? new Date(t.date+'T'+t.time).getTime() : null;   // orario locale del dispositivo
-        const remindedAt = (dueAt && dueAt>Date.now()) ? null : (dueAt||null);  // i task già passati non ri-suonano
+        const dueAt = (t.date && t.time) ? new Date(t.date+'T'+t.time).getTime() : null;
+        const remindedAt = (dueAt && dueAt>Date.now()) ? null : (dueAt||null);
         await setDoc(doc(db,'tempo_tasks',t.id), {
-          id:t.id, title:(t.title||'Task').slice(0,120), date:t.date, time:t.time||null,
-          dueAt, remindedAt, done:false, updatedAt: serverTimestamp()
+          id:t.id, title:t.title||'', notes:t.notes||'', done:!!t.done,
+          date:t.date||null, time:t.time||null, priority:t.priority||null,
+          catId:t.catId||null, subId:t.subId||null, phone:t.phone||'',
+          subtasks:(t.subtasks||[]), attachments:(t.attachments||[]).map(a=>({id:a.id,name:a.name||'',type:a.type||'',size:a.size||0})),
+          dueAt, remindedAt, createdAt:t.createdAt||Date.now(), updatedAt:t.updatedAt||Date.now()
         });
       }catch(e){ console.warn('syncTask', e); }
     };
     window.fb.removeTask = async (id)=>{ try{ await deleteDoc(doc(db,'tempo_tasks',id)); }catch(e){} };
+    window.fb.syncCats = async (list)=>{ try{ await setDoc(doc(db,'tempo_meta','categories'), { list:list||[], updatedAt:Date.now() }); }catch(e){} };
+
+    // Ascolto in tempo reale: task e categorie. I callback (nel codice classico) fanno il merge.
+    window.fb.startSync = (onTasks, onCats)=>{
+      try{
+        onSnapshot(collection(db,'tempo_tasks'), s=>{ onTasks(s.docs.map(d=>d.data())); }, e=>console.warn('sync tasks', e));
+        onSnapshot(doc(db,'tempo_meta','categories'), s=>{ const d=s.data(); if(d&&Array.isArray(d.list)) onCats(d.list, d.updatedAt||0); }, e=>console.warn('sync cats', e));
+      }catch(e){ console.warn('startSync', e); }
+    };
 
     window.fb.enableNotifications = async ()=>{
       if(!messaging) return {ok:false, reason:'non supportato (su iPhone aggiungi prima l’app alla Home)'};
@@ -1258,11 +1311,11 @@ if(configured){
       const reg = await navigator.serviceWorker.ready;
       const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
       if(!token) return {ok:false, reason:'token non ottenuto'};
-      await setDoc(doc(db,'tempo_tokens',token), { token, ua: navigator.userAgent.slice(0,180), createdAt: serverTimestamp() });
+      await setDoc(doc(db,'tempo_tokens',token), { token, ua: navigator.userAgent.slice(0,180), createdAt: Date.now() });
       return {ok:true};
     };
 
-    document.dispatchEvent(new Event('fb-ready'));   // sincronizza subito i task esistenti
+    document.dispatchEvent(new Event('fb-ready'));   // avvia la sincronizzazione
   }catch(e){ console.warn('Firebase non inizializzato:', e); }
 }
 </script>
