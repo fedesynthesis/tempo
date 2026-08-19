@@ -387,8 +387,34 @@ body.paper.rough-ready .ck::before,body.paper.rough-ready .sub .sck::before{cont
 body.paper.rough-ready .ck svg,body.paper.rough-ready .sub .sck svg{display:none}
 body.paper.rough-ready .row.done .ck,body.paper.rough-ready .sub.done .sck{background:transparent}
 body.paper.rough-ready .row.done .ck::after,body.paper.rough-ready .sub.done .sck::after{content:"";position:absolute;inset:-5px;background:var(--rough-check) center/100% 100% no-repeat;pointer-events:none}
+/* ---------- Wizard nuovo task (a step) ---------- */
+.wiz{position:fixed;left:0;right:0;bottom:0;z-index:61;max-width:520px;margin:0 auto;background:var(--bg);
+  border-radius:26px 26px 0 0;box-shadow:var(--sh-lg);transform:translateY(100%);transition:transform .34s var(--ease);
+  max-height:92vh;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom)}
+.wiz.on{transform:none}
+.wizbar{padding:16px 18px 4px}
+.wizprog{display:flex;gap:6px}
+.wizprog i{flex:1;height:4px;border-radius:99px;background:var(--line);transition:background .3s var(--ease)}
+.wizprog i.on{background:var(--accent)}
+.wizstep{padding:4px 20px 0;color:var(--accent);font-family:var(--disp);font-style:italic;font-size:14px}
+.wizbody{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 20px 10px;flex:1;min-height:180px}
+.wizq{font-family:var(--disp);font-size:25px;font-weight:400;letter-spacing:-.01em;color:var(--txt);margin:6px 2px 18px;line-height:1.15}
+.wizinput{width:100%;border:none;background:none;outline:none;font-size:19px;font-weight:500;padding:4px 2px;resize:none;line-height:1.4;color:var(--txt)}
+.wizinput::placeholder{color:var(--txt3)}
+.wizerr{color:var(--danger);font-size:13px;font-weight:600;margin:8px 2px 0}
+.wizfoot{display:flex;align-items:center;gap:10px;padding:14px 18px;border-top:1px solid var(--line);background:var(--bg);flex:none}
+.wizfoot .sp{flex:1}
+.wizlink{color:var(--txt2);font-weight:600;font-size:14px;background:none;border:none;padding:9px 6px}
+.wizbtn{display:inline-flex;align-items:center;gap:7px;padding:12px 20px;border-radius:var(--r-s);font-weight:700;font-size:15px;
+  background:var(--surface);border:1px solid var(--line2);color:var(--txt);cursor:pointer}
+.wizbtn.primary{background:var(--accent);color:#fff;border:none;box-shadow:0 6px 16px -6px rgba(184,73,44,.55)}
+.wizbtn:active{transform:scale(.97)}
+.wizbtn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2.2}
+.wizback{width:44px;height:44px;padding:0;justify-content:center;border-radius:12px}
+
 /* ---------- Desktop / monitor (barra laterale) ---------- */
 @media (min-width:900px){
+  .wiz{left:232px;right:0;max-width:600px}
   :root{--nav-h:0px}
   #root{max-width:none;margin:0;padding-left:232px;box-shadow:none}
   .topbar{padding:16px 30px;border-bottom:1px solid var(--line);background:var(--surface);backdrop-filter:none}
@@ -454,6 +480,14 @@ body.paper.rough-ready .row.done .ck::after,body.paper.rough-ready .sub.done .sc
   <div class="grab" id="grab"><i></i></div>
   <div class="scroll" id="sheetbody"></div>
   <div class="sheetfoot" id="sheetfoot"></div>
+</section>
+
+<div class="scrim" id="wizscrim" data-act="wiz-cancel"></div>
+<section class="wiz" id="wiz" aria-modal="true" role="dialog">
+  <div class="wizbar"><div class="wizprog" id="wizprog"></div></div>
+  <div class="wizstep" id="wizstep"></div>
+  <div class="wizbody" id="wizbody"></div>
+  <div class="wizfoot" id="wizfoot"></div>
 </section>
 
 <div class="viewer" id="viewer">
@@ -959,6 +993,72 @@ function renderCatPick(){
 }
 function autoGrow(el){ if(!el)return; el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,220)+'px'; }
 
+/* ============ WIZARD nuovo task (a step) ============ */
+const WIZ = [
+  {k:'desc', q:'Cosa devi fare?'},
+  {k:'cat',  q:'In che categoria?'},
+  {k:'when', q:'Quando?'},
+  {k:'prio', q:'Che priorità?'},
+  {k:'file', q:'Vuoi allegare un file?'},
+];
+let wizStep=0, wizTask=null, _wizAtts=[];
+const wizEl=$('#wiz'), wizScrim=$('#wizscrim');
+function openWizard(preset){
+  wizTask={id:uid(),title:'',notes:'',done:false,date:(preset&&preset.date)||null,time:null,priority:null,list:'',catId:(preset&&preset.catId)||null,subId:null,phone:'',subtasks:[],attachments:[],createdAt:Date.now(),updatedAt:Date.now()};
+  _wizAtts=[]; wizStep=0; renderWiz();
+  document.body.classList.add('lock'); wizScrim.classList.add('on'); wizEl.classList.add('on');
+  setTimeout(()=>{ const el=$('#wiztitle'); if(el) el.focus(); },340);
+}
+function wizClose(){ wizEl.classList.remove('on'); wizScrim.classList.remove('on'); document.body.classList.remove('lock'); }
+function wizCancel(){ _wizAtts.forEach(id=>fileDel(id)); wizTask=null; _wizAtts=[]; wizClose(); }
+function showWizErr(){ let e=$('#wizerr'); if(!e){ e=document.createElement('div'); e.className='wizerr'; e.id='wizerr'; const b=$('#wizbody'); if(b) b.appendChild(e); } if(e) e.textContent='Scrivi prima una descrizione'; const el=$('#wiztitle'); if(el) el.focus(); }
+function wizNext(){ if(wizStep===0 && !wizTask.title.trim()){ showWizErr(); return; } if(wizStep<WIZ.length-1){ wizStep++; renderWiz(); } else wizFinish(); }
+function wizBack(){ if(wizStep>0){ wizStep--; renderWiz(); } }
+function wizFinish(){
+  if(!wizTask) return;
+  if(!wizTask.title.trim()){ wizStep=0; renderWiz(); showWizErr(); return; }
+  wizTask.updatedAt=Date.now();
+  tasks.unshift(wizTask); save(); reconcile(wizTask);
+  wizTask=null; _wizAtts=[]; wizClose(); render(); toast('Task aggiunto ✓');
+}
+function wizPrio(key,val,t){ const on=(t.priority||null)===val; const label=key==='none'?'Nessuna':PRI[val].l; return `<button class="p-${key} ${on?'on':''}" data-act="wiz-prio" data-prio="${val||''}"><span class="d"></span>${label}</button>`; }
+function renderWizAtts(){
+  const el=$('#wizatts'); if(!el)return; const t=wizTask;
+  const rows=(t.attachments||[]).map(a=>{ const isImg=(a.type||'').startsWith('image/');
+    return `<div class="att"><span class="thumb">${isImg?svg('img'):svg('file')}</span><div class="info"><div class="an">${esc(a.name)}</div><div class="as">${fmtSize(a.size)}</div></div><button class="del" data-act="wiz-att-del" data-aid="${a.id}">${svg('trash')}</button></div>`; }).join('');
+  el.innerHTML=`<div class="atts">${rows}</div><button class="attadd" data-act="wiz-file">${svg('plus')} Allega file (PDF, foto…)</button>`;
+}
+function renderWiz(){
+  const step=WIZ[wizStep], t=wizTask; if(!t) return;
+  $('#wizprog').innerHTML = WIZ.map((s,i)=>`<i class="${i<=wizStep?'on':''}"></i>`).join('');
+  $('#wizstep').textContent = `passo ${wizStep+1} di ${WIZ.length}`;
+  let h=`<div class="wizq">${step.q}</div>`;
+  if(step.k==='desc'){
+    h += `<textarea class="wizinput" id="wiztitle" data-wf="title" rows="2" placeholder="Descrizione del task…">${esc(t.title)}</textarea>`;
+  } else if(step.k==='cat'){
+    h += `<div class="chips">`+cats.map(c=>`<button class="catchip ${t.catId===c.id?'on':''}" data-act="wiz-cat" data-cat="${c.id}" style="--cc:${c.color}"><i></i>${esc(c.name)}</button>`).join('')+`</div>`;
+    h += `<div class="subadd" style="margin-top:8px">${svg('plus')}<input placeholder="Nuova categoria…" data-wf="newcat"></div>`;
+    const cat=getCat(t.catId);
+    if(cat){ h += `<div class="lbl" style="margin:16px 2px 8px">Sottocategoria · ${esc(cat.name)}</div><div class="chips">`+(cat.subs||[]).map(s=>`<button class="catchip sm ${t.subId===s.id?'on':''}" data-act="wiz-sub" data-sub="${s.id}" style="--cc:${cat.color}"><i></i>${esc(s.name)}</button>`).join('')+`</div><div class="subadd" style="margin-top:8px">${svg('plus')}<input placeholder="Nuova sottocategoria…" data-wf="newsub"></div>`; }
+  } else if(step.k==='when'){
+    h += `<div class="two"><div class="dtwrap">${svg('cal')}<input type="date" value="${t.date||''}" data-wf="date"></div><div class="dtwrap">${svg('clock')}<input type="time" value="${t.time||''}" data-wf="time"></div></div>`;
+  } else if(step.k==='prio'){
+    h += `<div class="priopts">${wizPrio('none',null,t)}${wizPrio('low','low',t)}${wizPrio('med','med',t)}${wizPrio('high','high',t)}</div>`;
+  } else if(step.k==='file'){
+    h += `<div id="wizatts"></div>`;
+  }
+  $('#wizbody').innerHTML=h;
+  if(step.k==='file') renderWizAtts();
+  const back = wizStep>0 ? `<button class="wizbtn wizback" data-act="wiz-back" aria-label="Indietro">${svg('cl')}</button>` : `<button class="wizlink" data-act="wiz-cancel">Annulla</button>`;
+  let right;
+  if(wizStep===WIZ.length-1) right = `<button class="wizbtn primary" data-act="wiz-finish">${svg('check')} Aggiungi</button>`;
+  else if(wizStep===0) right = `<button class="wizbtn primary" data-act="wiz-next">Avanti ${svg('cr')}</button>`;
+  else right = `<button class="wizlink" data-act="wiz-next">Salta</button><button class="wizbtn primary" data-act="wiz-next">Avanti ${svg('cr')}</button>`;
+  const finishNow = (wizStep>0 && wizStep<WIZ.length-1) ? `<button class="wizlink" data-act="wiz-finish">Fine</button>` : '';
+  $('#wizfoot').innerHTML = `${back}<div class="sp"></div>${finishNow}${right}`;
+  if(step.k==='desc') autoGrow($('#wiztitle'));
+}
+
 /* ============ ACTIONS ============ */
 function touch(t){ t.updatedAt=Date.now(); save(); }
 
@@ -969,8 +1069,17 @@ document.addEventListener('click',e=>{
   if(a==='nav'){ const v=el.dataset.view; if(v===state.view)return; const order=['today','tasks','cal']; const dir=order.indexOf(v)>order.indexOf(state.view)?1:-1; state.view=v; render(dir); return; }
   if(a==='today-jump'){ state.view='today'; state.calSel=todayStr(); render(); return; }
   if(a==='notif'){ notifEnable(); return; }
-  if(a==='new'){ openSheet(null); return; }
-  if(a==='new-on'){ openSheet(null); const t=getTask(state.editId); t.date=el.dataset.date; touch(t); renderSheet(); return; }
+  if(a==='new'){ openWizard(); return; }
+  if(a==='new-on'){ openWizard({date:el.dataset.date}); return; }
+  if(a==='wiz-cancel'){ wizCancel(); return; }
+  if(a==='wiz-back'){ wizBack(); return; }
+  if(a==='wiz-next'){ wizNext(); return; }
+  if(a==='wiz-finish'){ wizFinish(); return; }
+  if(a==='wiz-cat'){ const id=el.dataset.cat; wizTask.catId=(wizTask.catId===id?null:id); wizTask.subId=null; renderWiz(); return; }
+  if(a==='wiz-sub'){ const id=el.dataset.sub; wizTask.subId=(wizTask.subId===id?null:id); renderWiz(); return; }
+  if(a==='wiz-prio'){ wizTask.priority=el.dataset.prio||null; renderWiz(); return; }
+  if(a==='wiz-file'){ const fp=$('#filepick'); fp.value=''; fp._wiz=true; fp.click(); return; }
+  if(a==='wiz-att-del'){ const aid=el.dataset.aid; wizTask.attachments=wizTask.attachments.filter(x=>x.id!==aid); _wizAtts=_wizAtts.filter(x=>x!==aid); fileDel(aid); renderWizAtts(); return; }
   if(a==='close-sheet'){ closeSheet(); return; }
 
   if(a==='toggle'){ e.stopPropagation(); const t=getTask(el.dataset.id); if(!t)return;
@@ -1025,6 +1134,11 @@ document.addEventListener('submit',e=>{
 
 /* input/change delegati (sheet + ricerca) */
 document.addEventListener('input',e=>{
+  const wf=e.target.dataset.wf;
+  if(wf && wizTask){
+    if(wf==='title'){ wizTask.title=e.target.value; autoGrow(e.target); const er=$('#wizerr'); if(er) er.remove(); }
+    return;
+  }
   const f=e.target.dataset.field;
   if(f==='title'){ const t=getTask(state.editId); t.title=e.target.value; touch(t); autoGrow(e.target); if($('#callrow')) renderCallRow(); }
   else if(f==='notes'){ const t=getTask(state.editId); t.notes=e.target.value; touch(t); autoGrow(e.target); }
@@ -1034,11 +1148,26 @@ document.addEventListener('input',e=>{
   const cr=e.target.dataset.catren; if(cr){ const c=getCat(cr); if(c){ c.name=e.target.value; saveCats(); } }
 });
 document.addEventListener('change',e=>{
+  const wf=e.target.dataset.wf;
+  if(wf && wizTask){
+    if(wf==='date'){ wizTask.date=e.target.value||null; }
+    else if(wf==='time'){ wizTask.time=e.target.value||null; }
+    return;
+  }
   const f=e.target.dataset.field;
   if(f==='date'){ const t=getTask(state.editId); t.date=e.target.value||null; touch(t); reconcile(t); }
   else if(f==='time'){ const t=getTask(state.editId); t.time=e.target.value||null; touch(t); reconcile(t); }
 });
 document.addEventListener('keydown',e=>{
+  const wf=e.target.dataset.wf;
+  if(wf && wizTask && e.key==='Enter'){
+    e.preventDefault();
+    if(wf==='title'){ wizNext(); }
+    else if(wf==='newcat'){ const c=addCat(e.target.value); if(c){ wizTask.catId=c.id; wizTask.subId=null; renderWiz(); } }
+    else if(wf==='newsub'){ const s=addSub(wizTask.catId, e.target.value); if(s){ wizTask.subId=s.id; renderWiz(); } }
+    return;
+  }
+  if(e.key==='Escape' && wizEl.classList.contains('on')){ wizCancel(); return; }
   if(e.target.dataset.field==='subnew' && e.key==='Enter'){ e.preventDefault();
     const v=e.target.value.trim(); if(!v)return;
     const t=getTask(state.editId); (t.subtasks=t.subtasks||[]).push({id:uid(),title:v,done:false}); touch(t);
@@ -1054,14 +1183,16 @@ document.addEventListener('keydown',e=>{
 
 /* file picker */
 $('#filepick').addEventListener('change',async e=>{
-  const t=getTask(state.editId); if(!t){return;}
+  const wiz=e.target._wiz; e.target._wiz=false;
+  const t = wiz ? wizTask : getTask(state.editId);
+  if(!t){return;}
   const files=[...e.target.files];
   for(const file of files){
     const aid=uid();
-    try{ await fileSave(aid,file); (t.attachments=t.attachments||[]).push({id:aid,name:file.name,type:file.type,size:file.size}); }
+    try{ await fileSave(aid,file); (t.attachments=t.attachments||[]).push({id:aid,name:file.name,type:file.type,size:file.size}); if(wiz) _wizAtts.push(aid); }
     catch(err){ toast('File troppo grande o non salvabile'); }
   }
-  touch(t); renderAtts();
+  if(wiz){ renderWizAtts(); } else { touch(t); renderAtts(); }
 });
 /* ---- Visualizzatore allegati IN-APP (immagini, PDF, testo) ---- */
 let _viewer={url:null, rec:null};
