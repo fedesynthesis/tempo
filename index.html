@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="./icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Caveat:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/motion@13.1.0/dist/motion.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -396,9 +396,6 @@ body.paper.rough-ready .row.done .ck::after,body.paper.rough-ready .sub.done .sc
       <b>TEM<span>PO</span></b>
     </div>
     <div style="display:flex;gap:8px">
-      <button class="iconbtn" data-act="theme" aria-label="Tema taccuino">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h13a1 1 0 011 1v14a1 1 0 01-1 1H6a2 2 0 00-2 2V6a2 2 0 012-2z" stroke-linejoin="round"/><path d="M9 4v13" stroke-linecap="round"/></svg>
-      </button>
       <button class="iconbtn" data-act="notif" aria-label="Attiva notifiche">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8.5a6 6 0 10-12 0c0 6-2.4 7.5-2.4 7.5h16.8S18 14.5 18 8.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 20a2.5 2.5 0 005 0" stroke-linecap="round"/></svg>
       </button>
@@ -949,7 +946,6 @@ document.addEventListener('click',e=>{
   if(a==='nav'){ const v=el.dataset.view; if(v===state.view)return; const order=['today','tasks','cal']; const dir=order.indexOf(v)>order.indexOf(state.view)?1:-1; state.view=v; render(dir); return; }
   if(a==='today-jump'){ state.view='today'; state.calSel=todayStr(); render(); return; }
   if(a==='notif'){ notifEnable(); return; }
-  if(a==='theme'){ toggleTheme(); return; }
   if(a==='new'){ openSheet(null); return; }
   if(a==='new-on'){ openSheet(null); const t=getTask(state.editId); t.date=el.dataset.date; touch(t); renderSheet(); return; }
   if(a==='close-sheet'){ closeSheet(); return; }
@@ -1180,33 +1176,7 @@ async function notifEnable(){
   catch(e){ toast('Errore attivazione notifiche'); }
 }
 
-/* ---- Tema taccuino + grafiche hand-drawn (rough.js) ---- */
-let _roughDone=false;
-async function ensureRoughGraphics(){
-  if(_roughDone) return;
-  try{
-    const mod=await import('https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.esm.js');
-    const rough=mod.default||mod;
-    const NS='http://www.w3.org/2000/svg';
-    const hold=document.createElement('div'); hold.style.cssText='position:absolute;left:-9999px;top:0;width:0;height:0;overflow:hidden'; document.body.appendChild(hold);
-    const make=(drawer)=>{
-      const svg=document.createElementNS(NS,'svg'); svg.setAttribute('viewBox','0 0 24 24'); svg.setAttribute('width','24'); svg.setAttribute('height','24'); hold.appendChild(svg);
-      const rc=rough.svg(svg); drawer(rc,svg);
-      return 'url("data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'+svg.innerHTML+'</svg>')+'")';
-    };
-    const box=make((rc,svg)=>svg.appendChild(rc.rectangle(2.5,2.5,19,19,{roughness:1.8,stroke:'#3b3327',strokeWidth:1.5,fill:'none'})));
-    const check=make((rc,svg)=>svg.appendChild(rc.linearPath([[4.5,13],[10,18.5],[19.5,5.5]],{roughness:1.3,stroke:'#c0442e',strokeWidth:2.8})));
-    hold.remove();
-    const rs=document.documentElement.style; rs.setProperty('--rough-box',box); rs.setProperty('--rough-check',check);
-    document.body.classList.add('rough-ready');
-    _roughDone=true;
-  }catch(e){ console.warn('rough.js non disponibile:', e); }
-}
-function applyTheme(t){ document.body.classList.toggle('paper', t==='paper'); localStorage.setItem('tempo_theme', t); const tc=document.querySelector('meta[name=theme-color]'); if(tc) tc.setAttribute('content', t==='paper'?'#f3ead4':'#f6f6f3'); if(t==='paper') ensureRoughGraphics(); }
-function toggleTheme(){ const paper=!document.body.classList.contains('paper'); applyTheme(paper?'paper':'minimal'); toast(paper?'Modalità taccuino ✏️':'Modalità minimal'); }
-
 /* ============ START ============ */
-applyTheme(localStorage.getItem('tempo_theme')||'minimal');
 const _imp=tryImport();
 render();
 if(_imp) setTimeout(()=>toast(_imp+(_imp===1?' task importato':' task importati')),400);
