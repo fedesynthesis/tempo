@@ -1174,15 +1174,24 @@ function tryImport(){
   try{ data=JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1]))))); }
   catch(e){ history.replaceState(null,'',location.pathname+location.search); return 0; }
   history.replaceState(null,'',location.pathname+location.search); // evita re-import al refresh
-  if(!Array.isArray(data)) return 0;
-  const seen=new Set(tasks.map(t=>(t.title||'').trim().toLowerCase()+'|'+(t.date||'')));
+  const list = Array.isArray(data) ? data : (data && Array.isArray(data.tasks) ? data.tasks : null);
+  if(!list) return 0;
+  if(data && data.replace) tasks = [];   // modalità "ripulisci e imposta"
+  const byKey = new Map(tasks.map(t=>[(t.title||'').trim().toLowerCase()+'|'+(t.date||''), t]));
   let n=0;
-  data.forEach(d=>{
+  list.forEach(d=>{
     if(!d||!d.title) return;
     const key=String(d.title).trim().toLowerCase()+'|'+(d.date||'');
-    if(seen.has(key)) return; // niente duplicati
-    tasks.push({id:uid(),title:String(d.title),notes:d.notes||'',done:!!d.done,date:d.date||null,time:d.time||null,priority:d.priority||null,list:d.list||'',subtasks:[],attachments:[],createdAt:Date.now(),updatedAt:Date.now()});
-    seen.add(key); n++;
+    const ex = byKey.get(key);
+    if(ex){ // già presente → aggiorna categoria/priorità se fornite (niente doppioni)
+      let upd=false;
+      if(d.catId!==undefined && ex.catId!==d.catId){ ex.catId=d.catId; ex.subId=(d.subId||null); upd=true; }
+      if(d.priority!==undefined && d.priority!==null && ex.priority!==d.priority){ ex.priority=d.priority; upd=true; }
+      if(upd){ ex.updatedAt=Date.now(); n++; }
+    } else {
+      const t={id:uid(),title:String(d.title),notes:d.notes||'',done:!!d.done,date:d.date||null,time:d.time||null,priority:d.priority||null,list:'',catId:d.catId||null,subId:d.subId||null,phone:'',subtasks:[],attachments:[],createdAt:Date.now(),updatedAt:Date.now()};
+      tasks.push(t); byKey.set(key,t); n++;
+    }
   });
   if(n) save();
   return n;
