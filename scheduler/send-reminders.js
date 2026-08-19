@@ -64,7 +64,7 @@ async function sendToAll(tokens, title, body) {
   const dueSnap = await db.collection('tempo_tasks').where('dueAt', '<=', now).get();
   for (const d of dueSnap.docs) {
     const t = d.data();
-    if (t.done || t.dueAt == null || t.remindedAt != null) continue;
+    if (t.deleted || t.done || t.dueAt == null || t.remindedAt != null) continue;
     if (now - t.dueAt > 6 * 60 * 60 * 1000) { await d.ref.update({ remindedAt: now }).catch(() => {}); continue; } // troppo vecchio, non avviso
     await sendToAll(tokens, 'TEMPO — in scadenza', t.title || 'Hai un task in scadenza');
     await d.ref.update({ remindedAt: now }).catch(() => {});
@@ -78,7 +78,7 @@ async function sendToAll(tokens, title, body) {
     const meta = (await metaRef.get()).data() || {};
     if (meta.lastSent !== today) {
       const snap = await db.collection('tempo_tasks').where('date', '==', today).get();
-      const list = snap.docs.map(d => d.data()).filter(t => !t.done)
+      const list = snap.docs.map(d => d.data()).filter(t => !t.done && !t.deleted)
         .sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
       let body;
       if (list.length === 0) body = 'Nessun task in agenda per oggi. Buona giornata!';
