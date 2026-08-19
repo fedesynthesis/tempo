@@ -1179,14 +1179,14 @@ if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.s
 <!-- Incolla le tue chiavi nei due punti INCOLLA_QUI qui sotto. Finché non lo fai, la app funziona uguale (solo senza notifiche). -->
 <script type="module">
 const firebaseConfig = {
-  apiKey:            "INCOLLA_QUI",
-  authDomain:        "INCOLLA_QUI",
-  projectId:         "INCOLLA_QUI",
-  storageBucket:     "INCOLLA_QUI",
-  messagingSenderId: "INCOLLA_QUI",
-  appId:             "INCOLLA_QUI"
+  apiKey:            "AIzaSyCGPx6HkTAHVHG0D5UaTTNVZsDWYj6DWi4",
+  authDomain:        "tempo-1580f.firebaseapp.com",
+  projectId:         "tempo-1580f",
+  storageBucket:     "tempo-1580f.firebasestorage.app",
+  messagingSenderId: "184502030968",
+  appId:             "1:184502030968:web:56d7e9d3a08e85181e138d"
 };
-const VAPID_KEY = "INCOLLA_QUI"; // Firebase console → Cloud Messaging → Web Push certificates → Key pair
+const VAPID_KEY = "BLMnmXBDgFt8Xok8ddgmG_eA6ZM3_bvmWpFl3_464k9Quu6KQ8HjSxag2xufbl5_iUohhsOMbG7F7boM7ws-TTc"; // Web Push certificate (tempo-1580f)
 
 window.fb = { ready:false, syncTask(){}, removeTask(){}, enableNotifications: async()=>({ok:false,reason:'Firebase non configurato'}) };
 
