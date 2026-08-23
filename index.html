@@ -253,7 +253,9 @@ input[type=date].inp,input[type=time].inp{-webkit-appearance:none;appearance:non
 .winchk .winbox{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--line2);flex:none;display:grid;place-items:center;background:var(--surface);transition:.15s var(--ease)}
 .winchk.on .winbox{background:var(--accent);border-color:var(--accent)}
 .winchk .winbox svg{width:12px;height:12px;stroke:#fff;fill:none;stroke-width:3.2}
-.remopts{display:flex;flex-wrap:wrap;gap:8px;margin-top:2px}
+.remopts{display:flex;flex-direction:column;gap:8px;margin-top:2px}
+.remgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.remopts .chip{white-space:normal}
 .priopts{display:flex;gap:8px}
 .priopts button{flex:1;padding:10px 4px;border-radius:11px;background:var(--surface);border:1px solid var(--line);
   font-size:13px;font-weight:700;color:var(--txt2);display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:var(--sh);transition:.16s var(--ease)}
@@ -1116,12 +1118,26 @@ function dragUp(){
 
 document.addEventListener('mousedown', dragDown);
 document.addEventListener('touchstart', dragDown, {passive:false});
-// opzioni "Avviso" (quando notificare), a selezione singola come la priorità
+// opzioni "Avviso" (quando notificare) — MULTI-selezione: array `reminds`
 const REM=[['at',"All'orario"],['1h','1 ora prima'],['2h','2 ore prima'],['1d','Il giorno prima'],['2d','2 giorni prima'],['daily','Ogni giorno']];
-function remBtns(sel, act){
-  const cur = sel || 'at';   // default (campo assente) = All'orario, come il comportamento storico
-  return `<button class="chip ${cur==='none'?'on':''}" data-act="${act}" data-rem="none">Nessuno</button>`
-    + REM.map(([k,l])=>`<button class="chip ${cur===k?'on':''}" data-act="${act}" data-rem="${k}">${l}</button>`).join('');
+// avvisi selezionati (array di chiavi). Compat col vecchio campo singolo `remind`. Default = ['at'].
+function remindsSel(t){
+  if(Array.isArray(t.reminds)) return t.reminds;
+  if(t.remind) return t.remind==='none' ? [] : [t.remind];
+  return ['at'];
+}
+function toggleRemind(t, key){
+  let sel = remindsSel(t).slice();
+  if(key==='none') sel=[];
+  else if(sel.includes(key)) sel = sel.filter(x=>x!==key);
+  else sel.push(key);
+  t.reminds = sel; delete t.remind;
+}
+function remBtns(sel, act){   // sel = array delle chiavi selezionate; "Nessuno" a tutta larghezza + griglia 2 colonne
+  return `<button class="chip rem-none ${sel.length===0?'on':''}" data-act="${act}" data-rem="none">Nessuno</button>`
+    + `<div class="remgrid">`
+    + REM.map(([k,l])=>`<button class="chip ${sel.includes(k)?'on':''}" data-act="${act}" data-rem="${k}">${l}</button>`).join('')
+    + `</div>`;
 }
 // etichetta orario: singolo, finestra "9:00–18:00", o solo fine "entro le 18:00"
 function timeLabel(t){
@@ -1214,8 +1230,8 @@ function renderSheet(){
         ${prioBtn('none',null,t)}${prioBtn('low','low',t)}${prioBtn('med','med',t)}${prioBtn('high','high',t)}
       </div></div>`;
 
-  h += `<div class="field"><div class="lbl">${svg('bell')} Avviso</div>
-      <div class="remopts">${remBtns(t.remind, 'rem')}</div></div>`;
+  h += `<div class="field"><div class="lbl">${svg('bell')} Avviso <span style="font-weight:500;color:var(--txt3);text-transform:none;letter-spacing:0">· puoi sceglierne più di uno</span></div>
+      <div class="remopts">${remBtns(remindsSel(t), 'rem')}</div></div>`;
 
   h += `<div class="field"><div class="lbl">${svg('phone')} Telefono</div>
       <div class="dtwrap">${svg('phone')}<input type="tel" inputmode="tel" placeholder="Numero — o scegli dalla rubrica" value="${esc(t.phone)}" data-field="phone"></div>
@@ -1367,7 +1383,7 @@ function renderWiz(){
     h += `<button class="winchk ${hasWin?'on':''}" data-act="wiz-win-toggle" type="button"><span class="winbox">${hasWin?svg('check'):''}</span><span>Finestra oraria (es. 9–18)</span></button>`;
   } else if(step.k==='prio'){
     h += `<div class="priopts">${wizPrio('none',null,t)}${wizPrio('low','low',t)}${wizPrio('med','med',t)}${wizPrio('high','high',t)}</div>`;
-    h += `<div class="lbl" style="margin:20px 2px 10px">${svg('bell')} Avviso</div><div class="remopts">${remBtns(t.remind, 'wiz-rem')}</div>`;
+    h += `<div class="lbl" style="margin:20px 2px 10px">${svg('bell')} Avviso <span style="font-weight:500;color:var(--txt3);text-transform:none;letter-spacing:0">· puoi sceglierne più di uno</span></div><div class="remopts">${remBtns(remindsSel(t), 'wiz-rem')}</div>`;
   } else if(step.k==='file'){
     h += `<div id="wizatts"></div>`;
   }
@@ -1412,7 +1428,8 @@ document.addEventListener('click',e=>{
   if(a==='wiz-sub'){ const id=el.dataset.sub; wizTask.subId=(wizTask.subId===id?null:id); renderWiz(); return; }
   if(a==='wiz-prio'){ wizTask.priority=el.dataset.prio||null; renderWiz(); return; }
   if(a==='wiz-win-toggle'){ if(!wizTask)return; wizTask.timeEnd = (wizTask.timeEnd==null) ? (wizTask.time||'18:00') : null; renderWiz(); return; }
-  if(a==='wiz-rem'){ if(!wizTask)return; wizTask.remind=el.dataset.rem||null; renderWiz(); return; }
+  if(a==='wiz-rem'){ if(!wizTask)return; toggleRemind(wizTask, el.dataset.rem);
+    const sel=remindsSel(wizTask); document.querySelectorAll('.remopts .chip').forEach(c=>{ const k=c.dataset.rem; c.classList.toggle('on', k==='none'?sel.length===0:sel.includes(k)); }); return; }
   if(a==='wiz-file'){ const fp=$('#filepick'); fp.value=''; fp._wiz=true; fp.click(); return; }
   if(a==='wiz-att-del'){ const aid=el.dataset.aid; wizTask.attachments=wizTask.attachments.filter(x=>x.id!==aid); _wizAtts=_wizAtts.filter(x=>x!==aid); fileDel(aid); renderWizAtts(); return; }
   if(a==='close-sheet'){ closeSheet(); return; }
@@ -1447,7 +1464,8 @@ document.addEventListener('click',e=>{
   if(a==='prio'){ const t=getTask(state.editId); t.priority=el.dataset.prio||null; touch(t);
     document.querySelectorAll('#prio button').forEach(b=>b.classList.toggle('on',(b.dataset.prio||'')===(t.priority||''))); return; }
   if(a==='win-toggle'){ const t=getTask(state.editId); if(!t)return; t.timeEnd = (t.timeEnd==null) ? (t.time||'18:00') : null; touch(t); reconcile(t); renderSheet(); return; }
-  if(a==='rem'){ const t=getTask(state.editId); if(!t)return; t.remind=el.dataset.rem||null; touch(t); reconcile(t); renderSheet(); return; }
+  if(a==='rem'){ const t=getTask(state.editId); if(!t)return; toggleRemind(t, el.dataset.rem); touch(t); reconcile(t);
+    const sel=remindsSel(t); document.querySelectorAll('.remopts .chip').forEach(c=>{ const k=c.dataset.rem; c.classList.toggle('on', k==='none'?sel.length===0:sel.includes(k)); }); return; }
   if(a==='del-task'){ const id=state.editId; sheet.classList.remove('on'); scrim.classList.remove('on'); document.body.classList.remove('lock');
     deleteTask(id); state.editId=null; sheetNew=false; render(); return; }
   if(a==='sub-toggle'){ const t=getTask(state.editId); const s=t.subtasks.find(x=>x.id===el.dataset.sid); if(s){s.done=!s.done; touch(t); renderSubs();} return; }
@@ -1784,7 +1802,7 @@ if(configured){
         await setDoc(doc(db,TASKS,t.id), {
           id:t.id, title:t.title||'', notes:t.notes||'', done:!!t.done, deleted:false,
           date:t.date||null, time:t.time||null, timeEnd:t.timeEnd||null, priority:t.priority||null,
-          remind:t.remind||null,
+          reminds:(Array.isArray(t.reminds)?t.reminds:(t.remind?(t.remind==='none'?[]:[t.remind]):null)),
           order:(typeof t.order==='number'?t.order:null),
           catId:t.catId||null, subId:t.subId||null, phone:t.phone||'',
           subtasks:(t.subtasks||[]), attachments:(t.attachments||[]).map(a=>({id:a.id,name:a.name||'',type:a.type||'',size:a.size||0})),

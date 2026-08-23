@@ -60,33 +60,51 @@ async function sendToAll(tokens, title, body) {
   const tokens = await getTokens();
   if (!tokens.length) { console.log('Nessun token registrato — niente da fare.'); return; }
 
-  // offset (ms) del campo `remind` scelto sul task
+  // offset (ms) delle chiavi avviso
   const OFF = { at: 0, '1h': 3600e3, '2h': 7200e3, '1d': 86400e3, '2d': 2 * 86400e3 };
+  // avvisi del task (MULTI). Compat col vecchio campo singolo `remind`. Default = ['at'].
+  const remindsOf = (t) => {
+    if (Array.isArray(t.reminds)) return t.reminds;
+    if (t.remind) return t.remind === 'none' ? [] : [t.remind];
+    return ['at'];
+  };
 
-  // 1) ALERT: avvisa all'orario scelto (remind). Query fino a 2 giorni avanti (per il "2 giorni prima"),
-  //    poi calcolo l'istante di avviso = dueAt - offset per ciascun task.
+  // 1) ALERT: per ogni avviso scelto, notifica a dueAt - offset. Traccia quali sono già partiti in `remindedKeys`.
+  //    Query fino a 2 giorni avanti (per il "2 giorni prima").
   const dueSnap = await db.collection('tempo_tasks').where('dueAt', '<=', now + 2 * 86400e3).get();
   for (const d of dueSnap.docs) {
     const t = d.data();
     if (t.deleted || t.done || t.dueAt == null) continue;
-    const mode = t.remind || 'at';                 // default: all'orario (comportamento storico)
-    if (mode === 'none') continue;                 // avviso disattivato
-    if (mode === 'daily') continue;                // gestito nel blocco "ogni giorno"
-    if (t.remindedAt != null) continue;
-    const fireAt = t.dueAt - (OFF[mode] || 0);
-    if (fireAt > now) continue;                    // non è ancora ora di avvisare
-    if (now - fireAt > 6 * 60 * 60 * 1000) { await d.ref.update({ remindedAt: now }).catch(() => {}); continue; } // troppo vecchio
-    await sendToAll(tokens, 'TEMPO — promemoria', t.title || 'Hai un task da fare');
-    await d.ref.update({ remindedAt: now }).catch(() => {});
-    console.log('Alert inviato:', t.title, '(', mode, ')');
+    const keys = remindsOf(t).filter(k => k !== 'daily' && k !== 'none');
+    if (!keys.length) continue;
+    let fired = Array.isArray(t.remindedKeys) ? t.remindedKeys.slice() : [];
+    // migrazione dal vecchio `remindedAt` (avviso singolo già mandato): segno come già fatti gli offset scaduti allora
+    if (!Array.isArray(t.remindedKeys) && t.remindedAt != null) {
+      for (const k of keys) if (t.dueAt - (OFF[k] || 0) <= t.remindedAt) fired.push(k);
+    }
+    let changed = false;
+    for (const k of keys) {
+      if (fired.includes(k)) continue;
+      const fireAt = t.dueAt - (OFF[k] || 0);
+      if (fireAt > now) continue;                                  // non è ancora ora
+      if (now - fireAt > 6 * 60 * 60 * 1000) { fired.push(k); changed = true; continue; }  // troppo vecchio: segno senza inviare
+      await sendToAll(tokens, 'TEMPO — promemoria', t.title || 'Hai un task da fare');
+      fired.push(k); changed = true;
+      console.log('Alert inviato:', t.title, '(', k, ')');
+    }
+    if (changed) await d.ref.update({ remindedKeys: fired }).catch(() => {});
   }
 
   // 1b) PROMEMORIA "ogni giorno": una volta al giorno (dall'ora del digest) finché il giorno del task non è passato.
   {
     const rn = romeNow();
     if (rn.hour > DIGEST_HOUR || (rn.hour === DIGEST_HOUR && rn.minute >= DIGEST_MIN)) {
-      const dailySnap = await db.collection('tempo_tasks').where('remind', '==', 'daily').get();
-      for (const d of dailySnap.docs) {
+      const seen = new Set(); const dailyDocs = [];
+      const q1 = await db.collection('tempo_tasks').where('reminds', 'array-contains', 'daily').get();
+      q1.forEach(d => { if (!seen.has(d.id)) { seen.add(d.id); dailyDocs.push(d); } });
+      const q2 = await db.collection('tempo_tasks').where('remind', '==', 'daily').get();  // compat vecchio campo
+      q2.forEach(d => { if (!seen.has(d.id)) { seen.add(d.id); dailyDocs.push(d); } });
+      for (const d of dailyDocs) {
         const t = d.data();
         if (t.deleted || t.done) continue;
         if (t.date && t.date < rn.date) continue;   // giorno già passato
