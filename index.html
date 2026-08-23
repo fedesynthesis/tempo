@@ -458,6 +458,23 @@ body.paper.rough-ready .row.done .ck::after,body.paper.rough-ready .sub.done .sc
   .sheet{left:232px;right:0;max-width:600px}
   .toast{left:calc(50% + 116px)}
 }
+/* schermata login */
+.authgate{position:fixed;inset:0;z-index:200;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px}
+.authgate[hidden]{display:none}
+.authcard{width:100%;max-width:360px;text-align:center}
+.authbrand{font-family:'Fraunces',serif;font-weight:400;font-size:42px;letter-spacing:-.01em;color:var(--txt)}
+.authbrand span{color:var(--accent)}
+.authsub{font-family:'Fraunces',serif;font-style:italic;color:var(--txt2);margin:6px 0 26px;font-size:16px}
+.authinp{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-s);padding:14px 15px;font-weight:500;font-size:16px;color:var(--txt);margin-bottom:12px;outline:none;box-shadow:var(--sh)}
+.authinp:focus{border-color:var(--accent)}
+.autherr{color:var(--danger);font-size:13.5px;font-weight:600;min-height:18px;margin:2px 2px 10px;text-align:left}
+.authbtn{width:100%;background:var(--accent);color:#fff;border:none;border-radius:var(--r-s);padding:15px;font-weight:700;font-size:16px;box-shadow:0 8px 20px -8px rgba(184,73,44,.6)}
+.authbtn:disabled{opacity:.6}
+.authswitch{margin-top:18px;color:var(--txt2);font-weight:500;font-size:14px;background:none;border:none}
+.authswitch b{color:var(--accent)}
+/* pulsante esci in topbar */
+.iconbtn.out{color:var(--txt2)}
+.iconbtn[hidden]{display:none}   /* [hidden] deve vincere su .iconbtn{display:grid} */
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -474,6 +491,9 @@ body.paper.rough-ready .row.done .ck::after,body.paper.rough-ready .sub.done .sc
       </button>
       <button class="iconbtn" data-act="today-jump" aria-label="Vai a oggi">
         <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4" stroke-linecap="round"/><circle cx="12" cy="15" r="2.2" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <button class="iconbtn out" data-act="logout" id="logoutBtn" aria-label="Esci" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 12H3m0 0l3.5-3.5M3 12l3.5 3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
     </div>
   </header>
@@ -502,6 +522,20 @@ body.paper.rough-ready .row.done .ck::after,body.paper.rough-ready .sub.done .sc
     Scritte
   </button>
 </nav>
+
+<div class="authgate" id="authgate" hidden>
+  <div class="authcard">
+    <div class="authbrand">TEM<span>PO</span></div>
+    <div class="authsub" id="authSub">Accedi per vedere i tuoi task</div>
+    <form id="authForm" autocomplete="on">
+      <input class="authinp" id="authEmail" type="email" inputmode="email" autocomplete="username" placeholder="Email" required>
+      <input class="authinp" id="authPass" type="password" autocomplete="current-password" placeholder="Password" required minlength="6">
+      <div class="autherr" id="authErr"></div>
+      <button class="authbtn" type="submit" id="authSubmit">Accedi</button>
+    </form>
+    <button class="authswitch" data-act="auth-switch" id="authSwitch" type="button">Non hai un account? <b>Registrati</b></button>
+  </div>
+</div>
 
 <div class="scrim" id="scrim" data-act="close-sheet"></div>
 <section class="sheet" id="sheet" aria-modal="true" role="dialog">
@@ -1389,6 +1423,8 @@ document.addEventListener('click',e=>{
   if(a==='nav'){ const v=el.dataset.view; if(v===state.view)return; const order=['today','tasks','cal','scritte']; const dir=order.indexOf(v)>order.indexOf(state.view)?1:-1; state.view=v; render(dir); return; }
   if(a==='today-jump'){ state.view='today'; state.calSel=todayStr(); render(); return; }
   if(a==='notif'){ notifEnable(); return; }
+  if(a==='logout'){ if(window.fb && window.fb.logout) window.fb.logout(); return; }
+  if(a==='auth-switch'){ setAuthMode(authMode==='login'?'signup':'login'); return; }
   if(a==='new'){ if(state.view==='scritte') openScritta(null); else openWizard(); return; }
   if(a==='new-on'){ openWizard({date:el.dataset.date}); return; }
   if(a==='scr-open'){ openScritta(el.dataset.id); return; }
@@ -1459,6 +1495,7 @@ document.addEventListener('click',e=>{
 
 /* submit quick-add (Oggi) */
 document.addEventListener('submit',e=>{
+  if(e.target.id==='authForm'){ authSubmit(e); return; }
   if(e.target.dataset.act==='qadd-form'){ e.preventDefault();
     const inp=$('#qadd'); const v=inp.value.trim(); if(!v)return;
     const t={id:uid(),title:v,notes:'',done:false,date:todayStr(),time:null,priority:null,list:'',subtasks:[],attachments:[],createdAt:Date.now(),updatedAt:Date.now()};
@@ -1720,12 +1757,49 @@ function applyRemoteCats(list){
     if(changed){ _applyingCats=true; cats=[...byId.values()]; localStorage.setItem(CATKEY,JSON.stringify(cats)); _applyingCats=false; if(state.view==='tasks') renderTasks(); }
   }catch(e){ console.warn('applyRemoteCats', e); }
 }
-document.addEventListener('fb-ready',()=>{
+/* ---- Login / schermata di accesso ---- */
+let authMode='login';
+function showGate(on){ const g=$('#authgate'); if(g) g.hidden=!on; const lo=$('#logoutBtn'); if(lo) lo.hidden=on; }
+function setAuthMode(m){
+  authMode=m; const s=(m==='signup');
+  const sub=$('#authSub'), sub2=$('#authSubmit'), sw=$('#authSwitch'), pw=$('#authPass'), er=$('#authErr');
+  if(sub) sub.textContent = s?'Crea il tuo account':'Accedi per vedere i tuoi task';
+  if(sub2) sub2.textContent = s?'Registrati':'Accedi';
+  if(sw) sw.innerHTML = s?'Hai già un account? <b>Accedi</b>':'Non hai un account? <b>Registrati</b>';
+  if(pw) pw.setAttribute('autocomplete', s?'new-password':'current-password');
+  if(er) er.textContent='';
+}
+async function authSubmit(e){
+  if(e) e.preventDefault();
+  const email=($('#authEmail').value||'').trim(), pass=$('#authPass').value||'', er=$('#authErr');
+  er.textContent='';
+  if(!email || pass.length<6){ er.textContent='Inserisci email e password (almeno 6 caratteri).'; return; }
+  if(!window.fb || !window.fb.ready || !window.fb.auth){ er.textContent='Firebase non ancora pronto, riprova tra un attimo.'; return; }
+  const btn=$('#authSubmit'); btn.disabled=true; const lbl=btn.textContent; btn.textContent='Attendi…';
+  let r; try{ r=await window.fb.auth(authMode, email, pass); }catch(_){ r={ok:false,reason:'Errore di rete.'}; }
+  btn.disabled=false; btn.textContent=lbl;
+  if(!r.ok) er.textContent=r.reason||'Accesso non riuscito.';
+  // se ok → l'evento fb-login nasconde il gate
+}
+
+// login riuscito (uid nell'evento)
+document.addEventListener('fb-login', ev=>{
+  const uid = ev.detail && ev.detail.uid;
+  try{ // cambio account: se l'ultimo uid era diverso, azzero i task locali (non mescolo/marchio task altrui)
+    const last=localStorage.getItem('tempo_lastuid');
+    if(uid && last && last!==uid){ tasks=[]; save(); }
+    if(uid) localStorage.setItem('tempo_lastuid', uid);
+  }catch(_){}
+  showGate(false);
+  const em=$('#authEmail'), pw=$('#authPass'); if(em) em.value=''; if(pw) pw.value='';
   try{
     if(window.fb.startSync){ window.fb.startSync(applyRemoteTasks, applyRemoteCats); window.fb.syncCats && window.fb.syncCats(cats); }
-    else tasks.forEach(reconcile);
+    tasks.forEach(reconcile);   // marchia col mio uid i task già presenti (migrazione sicura)
   }catch(e){}
+  render();
 });
+// non loggato / logout
+document.addEventListener('fb-logout', ()=>{ try{ window.fb.stopSync && window.fb.stopSync(); }catch(_){}; showGate(true); });
 async function notifEnable(){
   if(!window.fb || !window.fb.ready){ toast('Prima configura Firebase (vedi SETUP-notifiche.md)'); return; }
   toast('Attivazione notifiche…');
@@ -1760,25 +1834,54 @@ if(configured){
   try{
     const V='10.12.2';
     const { initializeApp } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
-    const { getFirestore, doc, setDoc, collection, onSnapshot } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
+    const { getFirestore, doc, setDoc, collection, onSnapshot, query, where } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
     const { getMessaging, getToken, isSupported } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-messaging.js`);
+    const { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`);
     const app = initializeApp(firebaseConfig);
     const db  = getFirestore(app);
+    const auth = getAuth(app);
+    try{ await setPersistence(auth, browserLocalPersistence); }catch(_){}
     let messaging = null;
     try{ if(await isSupported()) messaging = getMessaging(app); }catch(_){}
     const TASKS='tempo_tasks';
+    let uid = null;          // uid dell'utente loggato (null = non loggato → nessuna scrittura)
+    let unsubs = [];
 
     window.fb.ready = true;
 
-    // Scrive il task COMPLETO (sync) + campi notifiche. updatedAt = numero (ms). MAI deleteDoc (solo tombstone).
+    // --- Autenticazione (email + password) ---
+    function authMsg(code){
+      return ({
+        'auth/invalid-email':'Email non valida.',
+        'auth/missing-password':'Inserisci la password.',
+        'auth/weak-password':'Password troppo debole (min 6 caratteri).',
+        'auth/email-already-in-use':'Email già registrata: accedi invece di registrarti.',
+        'auth/operation-not-allowed':'Metodo email/password non ancora abilitato nella console Firebase.',
+        'auth/invalid-credential':'Email o password errate.',
+        'auth/wrong-password':'Password errata.',
+        'auth/user-not-found':'Nessun account con questa email.',
+        'auth/too-many-requests':'Troppi tentativi, riprova più tardi.',
+        'auth/network-request-failed':'Rete non disponibile.'
+      })[code] || 'Accesso non riuscito.';
+    }
+    window.fb.auth = async (mode,email,pass)=>{
+      try{
+        if(mode==='signup') await createUserWithEmailAndPassword(auth,email,pass);
+        else await signInWithEmailAndPassword(auth,email,pass);
+        return {ok:true};
+      }catch(e){ return {ok:false, reason:authMsg(e && e.code)}; }
+    };
+    window.fb.logout = ()=>{ try{ signOut(auth); }catch(_){} };
+
+    // Scrive il task COMPLETO (sync) con uid. Nessuna scrittura senza login (uid null). MAI deleteDoc (solo tombstone).
     window.fb.syncTask = async (t)=>{
-      if(!t || !t.id) return;
+      if(!t || !t.id || !uid) return;
       try{
         const endT = t.timeEnd || t.time;   // con finestra oraria la scadenza è la fine
         const dueAt = (t.date && endT) ? new Date(t.date+'T'+endT).getTime() : null;
         const remindedAt = (dueAt && dueAt>Date.now()) ? null : (dueAt||null);
         await setDoc(doc(db,TASKS,t.id), {
-          id:t.id, title:t.title||'', notes:t.notes||'', done:!!t.done, deleted:false,
+          id:t.id, uid, title:t.title||'', notes:t.notes||'', done:!!t.done, deleted:false,
           date:t.date||null, time:t.time||null, timeEnd:t.timeEnd||null, priority:t.priority||null,
           remind:t.remind||null,
           order:(typeof t.order==='number'?t.order:null),
@@ -1788,15 +1891,18 @@ if(configured){
         });
       }catch(e){ console.warn('syncTask', e); }
     };
-    // Cancellazione = TOMBSTONE (non rimuove il doc): sicura, si propaga senza perdite.
-    window.fb.removeTask = async (id)=>{ if(!id)return; try{ await setDoc(doc(db,TASKS,id), { id, deleted:true, updatedAt:Date.now() }); }catch(e){ console.warn('removeTask', e); } };
-    window.fb.syncCats = async (list)=>{ try{ await setDoc(doc(db,'tempo_meta','categories'), { list:list||[], updatedAt:Date.now() }); }catch(e){} };
+    // Cancellazione = TOMBSTONE con uid (le regole richiedono uid == mio): sicura, si propaga senza perdite.
+    window.fb.removeTask = async (id)=>{ if(!id||!uid)return; try{ await setDoc(doc(db,TASKS,id), { id, uid, deleted:true, updatedAt:Date.now() }); }catch(e){ console.warn('removeTask', e); } };
+    // Categorie per-utente (doc = uid)
+    window.fb.syncCats = async (list)=>{ if(!uid)return; try{ await setDoc(doc(db,'tempo_cats',uid), { list:list||[], uid, updatedAt:Date.now() }); }catch(e){} };
     window.fb.startSync = (onTasks, onCats)=>{
+      if(!uid) return;
       try{
-        onSnapshot(collection(db,TASKS), s=>{ onTasks(s.docs.map(d=>d.data())); }, e=>console.warn('sync tasks', e));
-        onSnapshot(doc(db,'tempo_meta','categories'), s=>{ const d=s.data(); if(d&&Array.isArray(d.list)) onCats(d.list); }, e=>console.warn('sync cats', e));
+        unsubs.push(onSnapshot(query(collection(db,TASKS), where('uid','==',uid)), s=>{ onTasks(s.docs.map(d=>d.data())); }, e=>console.warn('sync tasks', e)));
+        unsubs.push(onSnapshot(doc(db,'tempo_cats',uid), s=>{ const d=s.data(); if(d&&Array.isArray(d.list)) onCats(d.list); }, e=>console.warn('sync cats', e)));
       }catch(e){ console.warn('startSync', e); }
     };
+    window.fb.stopSync = ()=>{ unsubs.forEach(u=>{ try{ u&&u(); }catch(_){}} ); unsubs=[]; };
 
     window.fb.enableNotifications = async ()=>{
       if(!messaging) return {ok:false, reason:'non supportato (su iPhone aggiungi prima l’app alla Home)'};
@@ -1807,11 +1913,19 @@ if(configured){
       const reg = await navigator.serviceWorker.ready;
       const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
       if(!token) return {ok:false, reason:'token non ottenuto'};
-      await setDoc(doc(db,'tempo_tokens',token), { token, ua: navigator.userAgent.slice(0,180), createdAt: Date.now() });
+      await setDoc(doc(db,'tempo_tokens',token), { token, uid:(uid||null), ua: navigator.userAgent.slice(0,180), createdAt: Date.now() });
       return {ok:true};
     };
 
-    document.dispatchEvent(new Event('fb-ready'));   // avvia la sincronizzazione
+    // Stato login → mostra/nasconde la schermata e avvia/ferma la sync (eventi gestiti nel main script)
+    onAuthStateChanged(auth, user=>{
+      window.fb.stopSync();
+      uid = user ? user.uid : null;
+      window.fb.uid = uid;
+      if(user) document.dispatchEvent(new CustomEvent('fb-login',{ detail:{ uid } }));
+      else document.dispatchEvent(new Event('fb-logout'));
+    });
+    document.dispatchEvent(new Event('fb-logout'));   // mostra subito il gate finché l'auth non risolve
   }catch(e){ console.warn('Firebase non inizializzato:', e); }
 }
 </script>
