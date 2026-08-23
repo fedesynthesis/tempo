@@ -60,15 +60,42 @@ async function sendToAll(tokens, title, body) {
   const tokens = await getTokens();
   if (!tokens.length) { console.log('Nessun token registrato — niente da fare.'); return; }
 
-  // 1) ALERT per task con orario scaduto e non ancora avvisato
-  const dueSnap = await db.collection('tempo_tasks').where('dueAt', '<=', now).get();
+  // offset (ms) del campo `remind` scelto sul task
+  const OFF = { at: 0, '1h': 3600e3, '2h': 7200e3, '1d': 86400e3, '2d': 2 * 86400e3 };
+
+  // 1) ALERT: avvisa all'orario scelto (remind). Query fino a 2 giorni avanti (per il "2 giorni prima"),
+  //    poi calcolo l'istante di avviso = dueAt - offset per ciascun task.
+  const dueSnap = await db.collection('tempo_tasks').where('dueAt', '<=', now + 2 * 86400e3).get();
   for (const d of dueSnap.docs) {
     const t = d.data();
-    if (t.deleted || t.done || t.dueAt == null || t.remindedAt != null) continue;
-    if (now - t.dueAt > 6 * 60 * 60 * 1000) { await d.ref.update({ remindedAt: now }).catch(() => {}); continue; } // troppo vecchio, non avviso
-    await sendToAll(tokens, 'TEMPO — in scadenza', t.title || 'Hai un task in scadenza');
+    if (t.deleted || t.done || t.dueAt == null) continue;
+    const mode = t.remind || 'at';                 // default: all'orario (comportamento storico)
+    if (mode === 'none') continue;                 // avviso disattivato
+    if (mode === 'daily') continue;                // gestito nel blocco "ogni giorno"
+    if (t.remindedAt != null) continue;
+    const fireAt = t.dueAt - (OFF[mode] || 0);
+    if (fireAt > now) continue;                    // non è ancora ora di avvisare
+    if (now - fireAt > 6 * 60 * 60 * 1000) { await d.ref.update({ remindedAt: now }).catch(() => {}); continue; } // troppo vecchio
+    await sendToAll(tokens, 'TEMPO — promemoria', t.title || 'Hai un task da fare');
     await d.ref.update({ remindedAt: now }).catch(() => {});
-    console.log('Alert inviato:', t.title);
+    console.log('Alert inviato:', t.title, '(', mode, ')');
+  }
+
+  // 1b) PROMEMORIA "ogni giorno": una volta al giorno (dall'ora del digest) finché il giorno del task non è passato.
+  {
+    const rn = romeNow();
+    if (rn.hour > DIGEST_HOUR || (rn.hour === DIGEST_HOUR && rn.minute >= DIGEST_MIN)) {
+      const dailySnap = await db.collection('tempo_tasks').where('remind', '==', 'daily').get();
+      for (const d of dailySnap.docs) {
+        const t = d.data();
+        if (t.deleted || t.done) continue;
+        if (t.date && t.date < rn.date) continue;   // giorno già passato
+        if (t.dailyLast === rn.date) continue;      // già avvisato oggi
+        await sendToAll(tokens, 'TEMPO — promemoria', t.title || 'Hai un task da fare');
+        await d.ref.update({ dailyLast: rn.date }).catch(() => {});
+        console.log('Promemoria giornaliero:', t.title);
+      }
+    }
   }
 
   // 2) DIGEST del mattino alle 06:50 (una volta al giorno)
@@ -83,7 +110,7 @@ async function sendToAll(tokens, title, body) {
       let body;
       if (list.length === 0) body = 'Nessun task in agenda per oggi. Buona giornata!';
       else {
-        const names = list.slice(0, 4).map(t => (t.time ? t.time + ' ' : '') + t.title).join(' · ');
+        const names = list.slice(0, 4).map(t => { const w = t.time ? (t.time + (t.timeEnd ? '–' + t.timeEnd : '') + ' ') : (t.timeEnd ? 'entro ' + t.timeEnd + ' ' : ''); return w + t.title; }).join(' · ');
         body = `${list.length} task oggi: ${names}` + (list.length > 4 ? ` +${list.length - 4}` : '');
       }
       await sendToAll(tokens, '☀️ La tua giornata', body);
