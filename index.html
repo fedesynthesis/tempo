@@ -908,7 +908,7 @@ function openScritta(id){
   else { scrEdit={id:uid(),desc:'',tipo:'',month:new Date().toISOString().slice(0,7),photoId:null,createdAt:Date.now(),updatedAt:Date.now()}; scrNew=true; _scrOrig=null; }
   renderScrForm();
   document.body.classList.add('lock'); $('#scrscrim').classList.add('on'); $('#scrsheet').classList.add('on');
-  if(scrNew) setTimeout(()=>{const el=$('#scr-desc'); if(el)el.focus();},340);
+  if(scrNew) autoFocus('#scr-desc');
 }
 function closeScritta(saveIt){
   if(saveIt && scrEdit){
@@ -1172,7 +1172,7 @@ function openSheet(id){
   renderSheet();
   document.body.classList.add('lock');
   scrim.classList.add('on'); sheet.classList.add('on');
-  if(!id){ setTimeout(()=>{ const el=$('#f-title'); if(el)el.focus(); },340); }
+  if(!id){ autoFocus('#f-title'); }
 }
 function closeSheet(){
   const t=getTask(state.editId);
@@ -1312,15 +1312,19 @@ const WIZ = [
 ];
 let wizStep=0, wizTask=null, _wizAtts=[];
 const wizEl=$('#wiz'), wizScrim=$('#wizscrim');
+// Auto-focus SOLO su desktop (mouse). Su iOS il focus programmatico non apre la
+// tastiera e blocca il tap successivo → niente auto-focus sui touch: si tocca il campo.
+const CAN_AUTOFOCUS = !!(window.matchMedia && window.matchMedia('(hover:hover) and (pointer:fine)').matches);
+function autoFocus(sel){ if(!CAN_AUTOFOCUS) return; setTimeout(()=>{ const el=$(sel); if(el) el.focus(); },340); }
 function openWizard(preset){
   wizTask={id:uid(),title:'',notes:'',done:false,date:(preset&&preset.date)||null,time:null,priority:null,list:'',catId:(preset&&preset.catId)||null,subId:null,phone:'',subtasks:[],attachments:[],createdAt:Date.now(),updatedAt:Date.now()};
   _wizAtts=[]; wizStep=0; renderWiz();
   document.body.classList.add('lock'); wizScrim.classList.add('on'); wizEl.classList.add('on');
-  setTimeout(()=>{ const el=$('#wiztitle'); if(el) el.focus(); },340);
+  autoFocus('#wiztitle');
 }
 function wizClose(){ wizEl.classList.remove('on'); wizScrim.classList.remove('on'); document.body.classList.remove('lock'); }
 function wizCancel(){ _wizAtts.forEach(id=>fileDel(id)); wizTask=null; _wizAtts=[]; wizClose(); }
-function showWizErr(){ let e=$('#wizerr'); if(!e){ e=document.createElement('div'); e.className='wizerr'; e.id='wizerr'; const b=$('#wizbody'); if(b) b.appendChild(e); } if(e) e.textContent='Scrivi prima una descrizione'; const el=$('#wiztitle'); if(el) el.focus(); }
+function showWizErr(){ let e=$('#wizerr'); if(!e){ e=document.createElement('div'); e.className='wizerr'; e.id='wizerr'; const b=$('#wizbody'); if(b) b.appendChild(e); } if(e) e.textContent='Scrivi prima una descrizione'; if(CAN_AUTOFOCUS){ const el=$('#wiztitle'); if(el) el.focus(); } }
 function wizNext(){ if(wizStep===0 && !wizTask.title.trim()){ showWizErr(); return; } if(wizStep<WIZ.length-1){ wizStep++; renderWiz(); } else wizFinish(); }
 function wizBack(){ if(wizStep>0){ wizStep--; renderWiz(); } }
 function wizFinish(){
