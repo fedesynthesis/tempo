@@ -625,6 +625,9 @@ function addSub(catId,name){ name=(name||'').trim(); const c=getCat(catId); if(!
 function renameCat(id,name){ const c=getCat(id); if(!c)return; c.name=name; c.updatedAt=Date.now(); saveCats(); pushCat(c); }
 function delCat(id){ cats=cats.filter(c=>c.id!==id); saveCats(); if(!_applyingCats && window.fb && window.fb.ready) window.fb.removeCat(id); tasks.forEach(t=>{ if(t.catId===id){ t.catId=null; t.subId=null; } }); save(); }
 function delSub(catId,subId){ const c=getCat(catId); if(!c)return; c.subs=(c.subs||[]).filter(s=>s.id!==subId); c.updatedAt=Date.now(); saveCats(); pushCat(c); tasks.forEach(t=>{ if(t.subId===subId) t.subId=null; }); save(); }
+// migrazione una-tantum: dà un updatedAt alle categorie custom o con sottocategorie create prima della sync,
+// così vengono pubblicate su tempo_cats al prossimo avvio (i default vuoti restano a 0 e non le sovrascrivono)
+(function migrateCatsUpdatedAt(){ let ch=false; cats.forEach(c=>{ if(!Number(c.updatedAt) && ((c.subs&&c.subs.length) || !['casa','lavoro','personale'].includes(c.id))){ c.updatedAt=Date.now(); ch=true; } }); if(ch) saveCats(); })();
 
 /* ---- Scritte stampi (elenco separato: descrizione + tipo + mese + foto) ---- */
 const SCR_KEY='tempo_scritte_v1';
