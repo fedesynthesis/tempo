@@ -611,18 +611,20 @@ let cats = loadCats();
 function loadCats(){
   try{ const v=JSON.parse(localStorage.getItem(CATKEY)); if(Array.isArray(v)) return v; }catch(e){}
   return [
-    {id:'casa',name:'Casa',color:'#1aa568',subs:[]},
-    {id:'lavoro',name:'Lavoro',color:'#4c6ef5',subs:[]},
-    {id:'personale',name:'Personale',color:'#9b5de5',subs:[]},
+    {id:'casa',name:'Casa',color:'#1aa568',subs:[],updatedAt:0},
+    {id:'lavoro',name:'Lavoro',color:'#4c6ef5',subs:[],updatedAt:0},
+    {id:'personale',name:'Personale',color:'#9b5de5',subs:[],updatedAt:0},
   ];
 }
-function saveCats(){ localStorage.setItem(CATKEY, JSON.stringify(cats)); if(!_applyingCats && window.fb && window.fb.ready) window.fb.syncCats(cats); }
+function saveCats(){ localStorage.setItem(CATKEY, JSON.stringify(cats)); }
+function pushCat(c){ if(!_applyingCats && c && window.fb && window.fb.ready) window.fb.syncCat(c); }
 function getCat(id){ return cats.find(c=>c.id===id)||null; }
 function getSub(cat,id){ return cat ? (cat.subs||[]).find(s=>s.id===id)||null : null; }
-function addCat(name){ name=(name||'').trim(); if(!name) return null; const c={id:uid(),name,color:CATPAL[cats.length%CATPAL.length],subs:[]}; cats.push(c); saveCats(); return c; }
-function addSub(catId,name){ name=(name||'').trim(); const c=getCat(catId); if(!c||!name) return null; const s={id:uid(),name}; (c.subs=c.subs||[]).push(s); saveCats(); return s; }
-function delCat(id){ cats=cats.filter(c=>c.id!==id); saveCats(); tasks.forEach(t=>{ if(t.catId===id){ t.catId=null; t.subId=null; } }); save(); }
-function delSub(catId,subId){ const c=getCat(catId); if(!c)return; c.subs=(c.subs||[]).filter(s=>s.id!==subId); saveCats(); tasks.forEach(t=>{ if(t.subId===subId) t.subId=null; }); save(); }
+function addCat(name){ name=(name||'').trim(); if(!name) return null; const c={id:uid(),name,color:CATPAL[cats.length%CATPAL.length],subs:[],updatedAt:Date.now()}; cats.push(c); saveCats(); pushCat(c); return c; }
+function addSub(catId,name){ name=(name||'').trim(); const c=getCat(catId); if(!c||!name) return null; const s={id:uid(),name}; (c.subs=c.subs||[]).push(s); c.updatedAt=Date.now(); saveCats(); pushCat(c); return s; }
+function renameCat(id,name){ const c=getCat(id); if(!c)return; c.name=name; c.updatedAt=Date.now(); saveCats(); pushCat(c); }
+function delCat(id){ cats=cats.filter(c=>c.id!==id); saveCats(); if(!_applyingCats && window.fb && window.fb.ready) window.fb.removeCat(id); tasks.forEach(t=>{ if(t.catId===id){ t.catId=null; t.subId=null; } }); save(); }
+function delSub(catId,subId){ const c=getCat(catId); if(!c)return; c.subs=(c.subs||[]).filter(s=>s.id!==subId); c.updatedAt=Date.now(); saveCats(); pushCat(c); tasks.forEach(t=>{ if(t.subId===subId) t.subId=null; }); save(); }
 
 /* ---- Scritte stampi (elenco separato: descrizione + tipo + mese + foto) ---- */
 const SCR_KEY='tempo_scritte_v1';
@@ -1545,7 +1547,7 @@ document.addEventListener('input',e=>{
   else if(f==='list'){ const t=getTask(state.editId); t.list=e.target.value.trim(); touch(t); }
   else if(f==='phone'){ const t=getTask(state.editId); t.phone=e.target.value.trim(); touch(t); renderCallRow(); }
   else if(f==='q'){ state.q=e.target.value; fillTaskList(); }
-  const cr=e.target.dataset.catren; if(cr){ const c=getCat(cr); if(c){ c.name=e.target.value; saveCats(); } }
+  const cr=e.target.dataset.catren; if(cr){ renameCat(cr, e.target.value); }
 });
 document.addEventListener('change',e=>{
   const sf=e.target.dataset.sf;
@@ -1778,9 +1780,14 @@ function applyRemoteTasks(remote){
 }
 function applyRemoteCats(list){
   try{
+    list=(list||[]).filter(c=>c&&c.id);
     const byId=new Map(cats.map(c=>[c.id,c])); let changed=false;
-    (list||[]).forEach(rc=>{ if(rc&&rc.id&&!byId.has(rc.id)){ byId.set(rc.id,rc); changed=true; } });
-    if(changed){ _applyingCats=true; cats=[...byId.values()]; localStorage.setItem(CATKEY,JSON.stringify(cats)); _applyingCats=false; if(state.view==='tasks') renderTasks(); }
+    list.forEach(rc=>{
+      if(rc.deleted){ if(byId.has(rc.id)){ byId.delete(rc.id); changed=true; } return; }
+      const l=byId.get(rc.id); const ru=Number(rc.updatedAt)||0, lu=l?(Number(l.updatedAt)||0):-1;
+      if(!l || ru>lu){ byId.set(rc.id, { id:rc.id, name:rc.name||'', color:rc.color||'#888', subs:Array.isArray(rc.subs)?rc.subs:[], updatedAt:ru }); changed=true; }
+    });
+    if(changed){ _applyingCats=true; cats=[...byId.values()]; saveCats(); _applyingCats=false; if(state.view==='tasks') renderTasks(); }
   }catch(e){ console.warn('applyRemoteCats', e); }
 }
 // Scritte: merge come i task (tombstone, last-write-wins, MAI cancellazione per assenza)
@@ -1803,7 +1810,7 @@ document.addEventListener('fb-ready',()=>{
   try{
     if(window.fb.startSync){
       window.fb.startSync(applyRemoteTasks, applyRemoteCats, applyRemoteScritte);
-      window.fb.syncCats && window.fb.syncCats(cats);
+      cats.forEach(c=>{ if(Number(c.updatedAt)>0){ try{ window.fb.syncCat(c); }catch(e){} } });   // pubblica solo le categorie modificate/custom
       scritte.forEach(s=>{ try{ window.fb.syncScritta(s); }catch(e){} });   // pubblica le scritte locali
       cloudBackfill();                                                       // carica le immagini già presenti in locale
     } else tasks.forEach(reconcile);
@@ -1836,7 +1843,7 @@ const firebaseConfig = {
 };
 const VAPID_KEY = "BLMnmXBDgFt8Xok8ddgmG_eA6ZM3_bvmWpFl3_464k9Quu6KQ8HjSxag2xufbl5_iUohhsOMbG7F7boM7ws-TTc"; // Web Push certificate (tempo-1580f)
 
-window.fb = { ready:false, syncTask(){}, removeTask(){}, syncCats(){}, startSync(){}, syncScritta(){}, removeScritta(){}, uploadFile:async()=>({ok:false}), fetchFile:async()=>null, enableNotifications: async()=>({ok:false,reason:'Firebase non configurato'}) };
+window.fb = { ready:false, syncTask(){}, removeTask(){}, syncCat(){}, removeCat(){}, startSync(){}, syncScritta(){}, removeScritta(){}, uploadFile:async()=>({ok:false}), fetchFile:async()=>null, enableNotifications: async()=>({ok:false,reason:'Firebase non configurato'}) };
 
 const configured = !Object.values(firebaseConfig).some(v=>String(v).includes('INCOLLA_QUI')) && !VAPID_KEY.includes('INCOLLA_QUI');
 if(configured){
@@ -1849,7 +1856,7 @@ if(configured){
     const db  = getFirestore(app);
     let messaging = null;
     try{ if(await isSupported()) messaging = getMessaging(app); }catch(_){}
-    const TASKS='tempo_tasks', FILES='tempo_files', SCR='tempo_scritte';
+    const TASKS='tempo_tasks', FILES='tempo_files', SCR='tempo_scritte', CATS='tempo_cats';
 
     window.fb.ready = true;
 
@@ -1894,11 +1901,13 @@ if(configured){
     };
     // Cancellazione = TOMBSTONE (non rimuove il doc): sicura, si propaga senza perdite.
     window.fb.removeTask = async (id)=>{ if(!id)return; try{ await setDoc(doc(db,TASKS,id), { id, deleted:true, updatedAt:Date.now() }); }catch(e){ console.warn('removeTask', e); } };
-    window.fb.syncCats = async (list)=>{ try{ await setDoc(doc(db,'tempo_meta','categories'), { list:list||[], updatedAt:Date.now() }); }catch(e){} };
+    // Categorie: un documento per categoria (con sottocategorie in `subs`), tombstone come i task
+    window.fb.syncCat   = async (c)=>{ if(!c||!c.id) return; try{ await setDoc(doc(db,CATS,c.id), { id:c.id, name:c.name||'', color:c.color||'', subs:(c.subs||[]).map(s=>({id:s.id,name:s.name||''})), deleted:false, updatedAt:Number(c.updatedAt)||Date.now() }); }catch(e){ console.warn('syncCat', e); } };
+    window.fb.removeCat = async (id)=>{ if(!id) return; try{ await setDoc(doc(db,CATS,id), { id, deleted:true, updatedAt:Date.now() }); }catch(e){ console.warn('removeCat', e); } };
     window.fb.startSync = (onTasks, onCats, onScritte)=>{
       try{
         onSnapshot(collection(db,TASKS), s=>{ onTasks(s.docs.map(d=>d.data())); }, e=>console.warn('sync tasks', e));
-        onSnapshot(doc(db,'tempo_meta','categories'), s=>{ const d=s.data(); if(d&&Array.isArray(d.list)) onCats(d.list); }, e=>console.warn('sync cats', e));
+        onSnapshot(collection(db,CATS), s=>{ onCats(s.docs.map(d=>d.data())); }, e=>console.warn('sync cats', e));
         if(onScritte) onSnapshot(collection(db,SCR), s=>{ onScritte(s.docs.map(d=>d.data())); }, e=>console.warn('sync scritte', e));
       }catch(e){ console.warn('startSync', e); }
     };
