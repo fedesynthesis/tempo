@@ -632,17 +632,57 @@ function saveScritte(){ localStorage.setItem(SCR_KEY, JSON.stringify(scritte)); 
 function getScritta(id){ return scritte.find(s=>s.id===id); }
 function fmtMonth(m){ if(!m) return 'senza mese'; const [y,mo]=m.split('-'); return new Intl.DateTimeFormat('it-IT',{month:'long',year:'numeric'}).format(new Date(+y,(+mo||1)-1,1)); }
 
-/* ---- IndexedDB per i file allegati ---- */
+/* ---- IndexedDB per i file allegati (+ sync su Firestore come base64) ---- */
 function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('tempo-files',1);
   r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('files'))r.result.createObjectStore('files',{keyPath:'id'})};
   r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);});}
-async function fileSave(id,file){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction('files','readwrite');
+async function _filePut(id,file){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction('files','readwrite');
   tx.objectStore('files').put({id,name:file.name,type:file.type,size:file.size,blob:file});
   tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error);});}
-async function fileGet(id){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction('files','readonly');
+async function _fileGetLocal(id){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction('files','readonly');
   const q=tx.objectStore('files').get(id); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error);});}
 async function fileDel(id){const db=await openDB();return new Promise(res=>{const tx=db.transaction('files','readwrite');
   tx.objectStore('files').delete(id); tx.oncomplete=()=>res();});}
+// comprime le immagini per stare sotto il limite di Firestore (~1MB per documento), restando leggibili
+function compressImage(blob){ return new Promise(async(resolve)=>{ try{
+  const img=await createImageBitmap(blob); let w=img.width,h=img.height;
+  const maxDim=2000, sc=Math.min(1, maxDim/Math.max(w,h)); w=Math.max(1,Math.round(w*sc)); h=Math.max(1,Math.round(h*sc));
+  const cv=document.createElement('canvas'); const draw=()=>{ cv.width=w; cv.height=h; cv.getContext('2d').drawImage(img,0,0,w,h); };
+  const toB=(q)=> new Promise(r=> cv.toBlob(b=>r(b),'image/jpeg',q));
+  draw(); let q=0.85, out=await toB(q), guard=0;
+  while(out && out.size>650000 && guard<8){ guard++; if(q>0.5){ q-=0.12; } else { w=Math.round(w*0.82); h=Math.round(h*0.82); draw(); } out=await toB(q); }
+  resolve(out||blob);
+}catch(e){ resolve(blob); } }); }
+// carica un file sul cloud (immagini compresse). Best-effort; segna gli id caricati.
+async function cloudUpload(id, blob, name){
+  if(!(window.fb && window.fb.ready && window.fb.uploadFile)) return {ok:false};
+  try{
+    let b=blob; if((blob.type||'').startsWith('image/')){ try{ b=await compressImage(blob); }catch(e){} }
+    const r=await window.fb.uploadFile(id, b, name||blob.name||'');
+    if(r && r.ok){ try{ const up=new Set(JSON.parse(localStorage.getItem('tempo_cloudfiles')||'[]')); up.add(id); localStorage.setItem('tempo_cloudfiles', JSON.stringify([...up])); }catch(e){} }
+    return r||{ok:false};
+  }catch(e){ return {ok:false}; }
+}
+// salva in locale e, in background, sincronizza sul cloud
+async function fileSave(id,file){ await _filePut(id,file); cloudUpload(id,file,file.name).catch(()=>{}); }
+// legge dal locale; se manca (altro dispositivo) lo scarica dal cloud e lo mette in cache locale
+async function fileGet(id){
+  const rec=await _fileGetLocal(id); if(rec) return rec;
+  if(window.fb && window.fb.ready && window.fb.fetchFile){
+    try{ const c=await window.fb.fetchFile(id); if(c && c.blob){ await _filePut(id, new File([c.blob], c.name||'file', {type:(c.type||c.blob.type||'')})); return await _fileGetLocal(id); } }catch(e){}
+  }
+  return null;
+}
+// carica sul cloud i file già presenti in locale ma non ancora sincronizzati (una volta)
+async function cloudBackfill(){
+  try{
+    const up=new Set(JSON.parse(localStorage.getItem('tempo_cloudfiles')||'[]'));
+    const ids=new Set();
+    tasks.forEach(t=>(t.attachments||[]).forEach(a=>{ if(a&&a.id) ids.add(a.id); }));
+    scritte.forEach(s=>{ if(s&&s.photoId) ids.add(s.photoId); });
+    for(const id of ids){ if(up.has(id)) continue; const rec=await _fileGetLocal(id); if(rec && rec.blob){ await cloudUpload(id, rec.blob, rec.name); } }
+  }catch(e){}
+}
 
 /* ============ DATE HELPERS ============ */
 const pad = n => String(n).padStart(2,'0');
@@ -918,6 +958,7 @@ function closeScritta(saveIt){
     scrEdit.updatedAt=Date.now();
     if(i>=0) scritte[i]=scrEdit; else scritte.unshift(scrEdit);
     saveScritte();
+    if(window.fb && window.fb.ready) window.fb.syncScritta(scrEdit);   // sincronizza sul cloud
     if(_scrOrig && _scrOrig!==scrEdit.photoId) fileDel(_scrOrig); // vecchia foto sostituita
   } else if(scrEdit){
     if(scrEdit.photoId && scrEdit.photoId!==_scrOrig) fileDel(scrEdit.photoId); // scarta foto nuova
@@ -929,7 +970,7 @@ function closeScritta(saveIt){
 function scrDelete(){
   if(!scrEdit)return; if(!confirm('Eliminare questa scritta?'))return;
   const id=scrEdit.id, pid=scrEdit.photoId;
-  scritte=scritte.filter(s=>s.id!==id); saveScritte(); if(pid) fileDel(pid); if(_scrOrig&&_scrOrig!==pid) fileDel(_scrOrig);
+  scritte=scritte.filter(s=>s.id!==id); saveScritte(); if(window.fb && window.fb.ready) window.fb.removeScritta(id); if(pid) fileDel(pid); if(_scrOrig&&_scrOrig!==pid) fileDel(_scrOrig);
   $('#scrsheet').classList.remove('on'); $('#scrscrim').classList.remove('on'); document.body.classList.remove('lock');
   scrEdit=null; scrNew=false; _scrOrig=null; renderScritte();
 }
@@ -1742,10 +1783,30 @@ function applyRemoteCats(list){
     if(changed){ _applyingCats=true; cats=[...byId.values()]; localStorage.setItem(CATKEY,JSON.stringify(cats)); _applyingCats=false; if(state.view==='tasks') renderTasks(); }
   }catch(e){ console.warn('applyRemoteCats', e); }
 }
+// Scritte: merge come i task (tombstone, last-write-wins, MAI cancellazione per assenza)
+function applyRemoteScritte(remote){
+  try{
+    remote=(remote||[]).filter(s=>s&&s.id);
+    const byId=new Map(scritte.map(s=>[s.id,s])); let changed=false;
+    remote.forEach(r=>{
+      if(r.deleted){ if(byId.has(r.id)){ byId.delete(r.id); changed=true; } return; }
+      const l=byId.get(r.id); const ru=Number(r.updatedAt)||0, lu=l?(Number(l.updatedAt)||0):-1;
+      if(!l || ru>lu){ byId.set(r.id, r); changed=true; }
+    });
+    if(changed){ scritte=[...byId.values()].filter(s=>!s.deleted); saveScritte();
+      const busy=document.getElementById('scrsheet').classList.contains('on');
+      if(state.view==='scritte' && !busy) renderScritte();
+    }
+  }catch(e){ console.warn('applyRemoteScritte', e); }
+}
 document.addEventListener('fb-ready',()=>{
   try{
-    if(window.fb.startSync){ window.fb.startSync(applyRemoteTasks, applyRemoteCats); window.fb.syncCats && window.fb.syncCats(cats); }
-    else tasks.forEach(reconcile);
+    if(window.fb.startSync){
+      window.fb.startSync(applyRemoteTasks, applyRemoteCats, applyRemoteScritte);
+      window.fb.syncCats && window.fb.syncCats(cats);
+      scritte.forEach(s=>{ try{ window.fb.syncScritta(s); }catch(e){} });   // pubblica le scritte locali
+      cloudBackfill();                                                       // carica le immagini già presenti in locale
+    } else tasks.forEach(reconcile);
   }catch(e){}
 });
 async function notifEnable(){
@@ -1775,22 +1836,43 @@ const firebaseConfig = {
 };
 const VAPID_KEY = "BLMnmXBDgFt8Xok8ddgmG_eA6ZM3_bvmWpFl3_464k9Quu6KQ8HjSxag2xufbl5_iUohhsOMbG7F7boM7ws-TTc"; // Web Push certificate (tempo-1580f)
 
-window.fb = { ready:false, syncTask(){}, removeTask(){}, syncCats(){}, startSync(){}, enableNotifications: async()=>({ok:false,reason:'Firebase non configurato'}) };
+window.fb = { ready:false, syncTask(){}, removeTask(){}, syncCats(){}, startSync(){}, syncScritta(){}, removeScritta(){}, uploadFile:async()=>({ok:false}), fetchFile:async()=>null, enableNotifications: async()=>({ok:false,reason:'Firebase non configurato'}) };
 
 const configured = !Object.values(firebaseConfig).some(v=>String(v).includes('INCOLLA_QUI')) && !VAPID_KEY.includes('INCOLLA_QUI');
 if(configured){
   try{
     const V='10.12.2';
     const { initializeApp } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
-    const { getFirestore, doc, setDoc, collection, onSnapshot } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
+    const { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
     const { getMessaging, getToken, isSupported } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-messaging.js`);
     const app = initializeApp(firebaseConfig);
     const db  = getFirestore(app);
     let messaging = null;
     try{ if(await isSupported()) messaging = getMessaging(app); }catch(_){}
-    const TASKS='tempo_tasks';
+    const TASKS='tempo_tasks', FILES='tempo_files', SCR='tempo_scritte';
 
     window.fb.ready = true;
+
+    // ---- File (immagini/allegati) in Firestore come base64 (no Firebase Storage/carta) ----
+    const _blobToB64 = (blob)=> new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]||''); r.onerror=rej; r.readAsDataURL(blob); });
+    const _b64ToBlob = (b64,type)=>{ const bin=atob(b64); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return new Blob([u],{type:type||'application/octet-stream'}); };
+    window.fb.uploadFile = async (id, blob, name)=>{
+      if(!id || !blob) return {ok:false};
+      try{
+        const b64 = await _blobToB64(blob);
+        if(b64.length > 950000) return {ok:false, reason:'troppo grande per la sync'};   // limite doc Firestore ~1MB
+        await setDoc(doc(db,FILES,id), { id, data:b64, type:blob.type||'', name:name||'', size:blob.size||0, updatedAt:Date.now() });
+        return {ok:true};
+      }catch(e){ console.warn('uploadFile', e); return {ok:false}; }
+    };
+    window.fb.fetchFile = async (id)=>{
+      if(!id) return null;
+      try{ const s=await getDoc(doc(db,FILES,id)); const d=s.data(); if(!d||!d.data) return null; return { blob:_b64ToBlob(d.data,d.type), name:d.name||'', type:d.type||'' }; }
+      catch(e){ console.warn('fetchFile', e); return null; }
+    };
+    // ---- Scritte stampi (sync, tombstone come i task) ----
+    window.fb.syncScritta   = async (s)=>{ if(!s||!s.id) return; try{ await setDoc(doc(db,SCR,s.id), { id:s.id, desc:s.desc||'', tipo:s.tipo||'', month:s.month||null, photoId:s.photoId||null, deleted:false, createdAt:s.createdAt||Date.now(), updatedAt:Number(s.updatedAt)||Date.now() }); }catch(e){ console.warn('syncScritta', e); } };
+    window.fb.removeScritta = async (id)=>{ if(!id) return; try{ await setDoc(doc(db,SCR,id), { id, deleted:true, updatedAt:Date.now() }); }catch(e){ console.warn('removeScritta', e); } };
 
     // Scrive il task COMPLETO (sync) + campi notifiche. updatedAt = numero (ms). MAI deleteDoc (solo tombstone).
     window.fb.syncTask = async (t)=>{
@@ -1813,10 +1895,11 @@ if(configured){
     // Cancellazione = TOMBSTONE (non rimuove il doc): sicura, si propaga senza perdite.
     window.fb.removeTask = async (id)=>{ if(!id)return; try{ await setDoc(doc(db,TASKS,id), { id, deleted:true, updatedAt:Date.now() }); }catch(e){ console.warn('removeTask', e); } };
     window.fb.syncCats = async (list)=>{ try{ await setDoc(doc(db,'tempo_meta','categories'), { list:list||[], updatedAt:Date.now() }); }catch(e){} };
-    window.fb.startSync = (onTasks, onCats)=>{
+    window.fb.startSync = (onTasks, onCats, onScritte)=>{
       try{
         onSnapshot(collection(db,TASKS), s=>{ onTasks(s.docs.map(d=>d.data())); }, e=>console.warn('sync tasks', e));
         onSnapshot(doc(db,'tempo_meta','categories'), s=>{ const d=s.data(); if(d&&Array.isArray(d.list)) onCats(d.list); }, e=>console.warn('sync cats', e));
+        if(onScritte) onSnapshot(collection(db,SCR), s=>{ onScritte(s.docs.map(d=>d.data())); }, e=>console.warn('sync scritte', e));
       }catch(e){ console.warn('startSync', e); }
     };
 
