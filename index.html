@@ -460,6 +460,30 @@ body.paper.rough-ready .row.done .ck::after,body.paper.rough-ready .sub.done .sc
   .sheet{left:232px;right:0;max-width:600px}
   .toast{left:calc(50% + 116px)}
 }
+/* ---------- Dentro l'Hub (iframe): la barra va in ALTO, niente doppia barra ---------- */
+body.embed{--nav-h:0px}
+body.embed .nav{position:sticky;top:0;left:auto;right:auto;bottom:auto;width:auto;max-width:520px;margin:0 auto;
+  z-index:39;display:grid;grid-template-columns:repeat(4,1fr);gap:0;flex-direction:row;align-items:stretch;
+  background:rgba(255,255,255,.92);backdrop-filter:blur(18px);
+  border-top:none;border-right:none;border-bottom:1px solid var(--line);padding:0}
+body.embed .nav button{flex-direction:column;justify-content:center;align-items:center;gap:3px;padding:8px 0 7px;
+  border-radius:0;font-size:10.5px;font-weight:700;letter-spacing:.01em;color:var(--txt3);background:none}
+body.embed .nav button svg{width:21px;height:21px}
+body.embed .nav button.on{color:var(--accent);background:none}
+body.embed .nav button.on::before{display:block;content:"";position:absolute;top:auto;bottom:0;width:28px;height:3px;
+  border-radius:4px 4px 0 0;background:var(--accent)}
+body.embed .topbar{top:0}
+body.embed main{padding:6px 18px 34px 18px;max-width:none;margin:0}
+body.embed #root{padding-left:0;max-width:520px;margin:0 auto}
+body.embed .fab{right:calc(50% - 260px + 18px);left:auto;bottom:calc(18px + env(safe-area-inset-bottom));width:60px;height:60px}
+@media(max-width:556px){ body.embed .fab{right:18px} }
+body.embed .sheet,body.embed .wiz{left:0;right:0;max-width:520px}
+body.embed .toast{left:50%;bottom:calc(26px + env(safe-area-inset-bottom))}
+@media (min-width:900px){
+  body.embed .nav{position:sticky;top:0;bottom:auto;width:auto;flex-direction:row;padding:0;
+    border-right:none;border-bottom:1px solid var(--line)}
+  body.embed .nav button{flex-direction:column;justify-content:center;padding:8px 0 7px;font-size:10.5px;letter-spacing:.01em}
+}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -1827,6 +1851,14 @@ async function notifEnable(){
 }
 
 /* ============ START ============ */
+/* Dentro l'Hub (iframe): sposto la barra sezioni in alto, sotto l'intestazione → niente doppia barra */
+(function embedMode(){
+  let inFrame=false; try{ inFrame = window.self!==window.top; }catch(e){ inFrame=true; }
+  if(!inFrame) return;
+  document.body.classList.add('embed');
+  const nav=document.getElementById('nav'), root=document.getElementById('root'), top=document.querySelector('.topbar');
+  if(nav && root && top) root.insertBefore(nav, top.nextSibling);
+})();
 const _imp=tryImport();
 render();
 if(_imp) setTimeout(()=>toast(_imp+(_imp===1?' task importato':' task importati')),400);
