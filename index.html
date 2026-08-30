@@ -1073,6 +1073,26 @@ function openListHTML(arr){
 let drag=null;
 function dragY(e){ return (e.touches&&e.touches[0])?e.touches[0].clientY:e.clientY; }
 
+/* Pressione prolungata: il task si stacca solo dopo aver tenuto premuto,
+   così un tocco di sfuggita non lo sposta più per sbaglio. */
+const HOLD_MS=600, HOLD_SLOP=10;
+let hold=null;
+function holdCancel(){
+  if(!hold) return;
+  clearTimeout(hold.timer);
+  hold.row.style.transform=''; hold.row.style.transition='';
+  document.removeEventListener('mousemove', holdMove);
+  document.removeEventListener('touchmove', holdMove);
+  document.removeEventListener('mouseup', holdCancel);
+  document.removeEventListener('touchend', holdCancel);
+  document.removeEventListener('touchcancel', holdCancel);
+  hold=null;
+}
+function holdMove(e){
+  if(!hold) return;
+  if(Math.abs(dragY(e)-hold.y0)>HOLD_SLOP) holdCancel();   // si è mosso: non voleva trascinare
+}
+
 function dragDown(e){
   const handle = e.target.closest ? e.target.closest('[data-act=drag]') : null;
   if(!handle) return;
@@ -1089,7 +1109,28 @@ function dragDown(e){
   if(group.length<2) return;                       // niente da riordinare
   e.preventDefault(); e.stopPropagation();
 
-  drag={ row, list, group, start:dragY(e), shift:0, lastY:dragY(e), raf:0 };
+  const y0=dragY(e);
+  hold={ row, list, group, handle, y0, timer:0 };
+  row.style.transition='transform .18s var(--ease)';
+  hold.timer=setTimeout(()=>{ const h=hold; hold=null;
+    clearTimeout(h.timer);
+    document.removeEventListener('mousemove', holdMove);
+    document.removeEventListener('touchmove', holdMove);
+    document.removeEventListener('mouseup', holdCancel);
+    document.removeEventListener('touchend', holdCancel);
+    document.removeEventListener('touchcancel', holdCancel);
+    dragStart(h, y0);
+  }, HOLD_MS);
+  document.addEventListener('mousemove', holdMove, {passive:false});
+  document.addEventListener('touchmove', holdMove, {passive:false});
+  document.addEventListener('mouseup', holdCancel);
+  document.addEventListener('touchend', holdCancel);
+  document.addEventListener('touchcancel', holdCancel);
+}
+
+function dragStart(h, y0){
+  const { row, list, group, handle } = h;
+  drag={ row, list, group, start:y0, shift:0, lastY:y0, raf:0 };
   row.style.transition='none';                     // segue il dito senza lag
   row.style.zIndex='1000'; row.style.position='relative';
   row.style.background='var(--surface)';
@@ -1099,6 +1140,7 @@ function dragDown(e){
   row.style.transform='scale(1.02)';
   handle.style.cursor='grabbing';
   document.body.style.userSelect='none';
+  try{ if(navigator.vibrate) navigator.vibrate(12); }catch(_){}   // "ora puoi spostarlo"
 
   document.addEventListener('mousemove', dragMove, {passive:false});
   document.addEventListener('touchmove', dragMove, {passive:false});
