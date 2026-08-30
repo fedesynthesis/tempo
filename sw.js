@@ -1,5 +1,5 @@
 /* TEMPO service worker — app offline + cache font/animazioni + notifiche push */
-const CACHE='tempo-v36';
+const CACHE='tempo-v37';
 const CORE=['./','./index.html','./manifest.json','./icon.svg','./icon-180.png','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(CACHE).then(c=>{
@@ -20,8 +20,9 @@ self.addEventListener('fetch',e=>{
   const isDoc = req.mode==='navigate' || req.destination==='document' || accept.includes('text/html');
   if(url.origin===location.origin && isDoc){
     e.respondWith(
-      fetch(req).then(r=>{const cl=r.clone();caches.open(CACHE).then(c=>c.put('./index.html',cl));return r})
-                .catch(()=>caches.match('./index.html').then(c=>c||caches.match(req)))
+      fetch(new Request(req.url,{cache:'no-store',credentials:'same-origin'}))   // salta la cache HTTP di GitHub
+        .then(r=>{const cl=r.clone();caches.open(CACHE).then(c=>c.put('./index.html',cl));return r})
+        .catch(()=>caches.match('./index.html').then(c=>c||caches.match(req)))
     );
     return;
   }
