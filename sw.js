@@ -1,5 +1,5 @@
 /* TEMPO service worker — app offline + cache font/animazioni + notifiche push */
-const CACHE='tempo-v34';
+const CACHE='tempo-v35';
 const CORE=['./','./index.html','./manifest.json','./icon.svg','./icon-180.png','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(CACHE).then(c=>{
@@ -14,6 +14,7 @@ self.addEventListener('fetch',e=>{
   const req=e.request;
   if(req.method!=='GET')return;
   const url=new URL(req.url);
+  if(url.pathname.startsWith('/hub/')) return;   // barra Hub: sempre dalla rete, cosi si aggiorna
   const accept=req.headers.get('accept')||'';
   // Documenti HTML (navigazioni comprese): SEMPRE network-first, fallback cache.
   const isDoc = req.mode==='navigate' || req.destination==='document' || accept.includes('text/html');
