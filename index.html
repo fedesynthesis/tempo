@@ -1882,13 +1882,41 @@ document.addEventListener('fb-ready',()=>{
       cats.forEach(c=>{ if(Number(c.updatedAt)>0){ try{ window.fb.syncCat(c); }catch(e){} } });   // pubblica solo le categorie modificate/custom
       scritte.forEach(s=>{ try{ window.fb.syncScritta(s); }catch(e){} });   // pubblica le scritte locali
       cloudBackfill();                                                       // carica le immagini già presenti in locale
+      if('Notification' in window && Notification.permission==='granted' && window.fb.refreshToken){ window.fb.refreshToken(true); }  // tieni vivo il token
     } else tasks.forEach(reconcile);
   }catch(e){}
 });
+
+/* ============ Notifiche implicite (niente campanella da cercare) ============ */
+/* iOS pretende un gesto per il permesso: lo chiedo io al PRIMO tocco nell'app.
+   Se è già concesso, rinfresco il token da solo (all'apertura e ogni tanto in primo piano),
+   così resta "sempre attiva" anche se il token FCM cambia. */
+(function autoNotif(){
+  if(!('Notification' in window)) return;
+  const registra = ()=>{ let n=0; const go=()=>{ if(window.fb && window.fb.refreshToken) window.fb.refreshToken(true); else if(n++<20) setTimeout(go,500); }; go(); };
+  if(Notification.permission==='granted'){ registra(); }
+  else if(Notification.permission==='default'){
+    const chiedi=()=>{
+      document.removeEventListener('pointerdown', chiedi, true);
+      document.removeEventListener('click', chiedi, true);
+      let p; try{ p = Notification.requestPermission(); }catch(e){ return; }
+      Promise.resolve(p).then(perm=>{ if(perm==='granted'){ registra(); toast('Notifiche attive ✓'); } });
+    };
+    document.addEventListener('pointerdown', chiedi, true);
+    document.addEventListener('click', chiedi, true);
+  }
+  let last=Date.now();
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState!=='visible' || Notification.permission!=='granted') return;
+    if(Date.now()-last < 12*3600e3) return; last=Date.now();
+    if(window.fb && window.fb.refreshToken) window.fb.refreshToken(true);
+  });
+})();
 async function notifEnable(){
-  if(!window.fb || !window.fb.ready){ toast('Prima configura Firebase (vedi SETUP-notifiche.md)'); return; }
+  if(!window.fb || !window.fb.ready){ toast('Notifiche non ancora pronte, riprova tra un attimo'); return; }
+  if('Notification' in window && Notification.permission==='denied'){ toast('Notifiche bloccate: Impostazioni iPhone → TEMPO → Notifiche'); return; }
   toast('Attivazione notifiche…');
-  try{ const r=await window.fb.enableNotifications(); toast(r.ok ? 'Notifiche attivate ✓' : 'Non attivate: '+r.reason); }
+  try{ const r=await window.fb.refreshToken(false); toast(r.ok ? 'Notifiche attive ✓' : 'Non attivate: '+r.reason); }
   catch(e){ toast('Errore attivazione notifiche'); }
 }
 
@@ -1917,7 +1945,7 @@ const firebaseConfig = {
 };
 const VAPID_KEY = "BLMnmXBDgFt8Xok8ddgmG_eA6ZM3_bvmWpFl3_464k9Quu6KQ8HjSxag2xufbl5_iUohhsOMbG7F7boM7ws-TTc"; // Web Push certificate (tempo-1580f)
 
-window.fb = { ready:false, syncTask(){}, removeTask(){}, syncCat(){}, removeCat(){}, startSync(){}, syncScritta(){}, removeScritta(){}, uploadFile:async()=>({ok:false}), fetchFile:async()=>null, enableNotifications: async()=>({ok:false,reason:'Firebase non configurato'}) };
+window.fb = { ready:false, syncTask(){}, removeTask(){}, syncCat(){}, removeCat(){}, startSync(){}, syncScritta(){}, removeScritta(){}, uploadFile:async()=>({ok:false}), fetchFile:async()=>null, enableNotifications: async()=>({ok:false,reason:'Firebase non configurato'}), refreshToken: async()=>({ok:false,reason:'Firebase non configurato'}) };
 
 const configured = !Object.values(firebaseConfig).some(v=>String(v).includes('INCOLLA_QUI')) && !VAPID_KEY.includes('INCOLLA_QUI');
 if(configured){
@@ -1986,18 +2014,27 @@ if(configured){
       }catch(e){ console.warn('startSync', e); }
     };
 
-    window.fb.enableNotifications = async ()=>{
+    // Registra/aggiorna SEMPRE il token del telefono. `silent`=true quando il permesso c'è già:
+    // rinfrescato a ogni apertura, così se il token FCM ruota lo scheduler non resta con uno morto.
+    window.fb.refreshToken = async (silent)=>{
       if(!messaging) return {ok:false, reason:'non supportato (su iPhone aggiungi prima l’app alla Home)'};
       if(!('Notification' in window)) return {ok:false, reason:'notifiche non disponibili'};
       let perm = Notification.permission;
-      if(perm==='default') perm = await Notification.requestPermission();
-      if(perm!=='granted') return {ok:false, reason:'permesso negato'};
-      const reg = await navigator.serviceWorker.ready;
-      const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
-      if(!token) return {ok:false, reason:'token non ottenuto'};
-      await setDoc(doc(db,'tempo_tokens',token), { token, ua: navigator.userAgent.slice(0,180), createdAt: Date.now() });
-      return {ok:true};
+      if(perm!=='granted'){
+        if(silent) return {ok:false, reason:'permesso non concesso'};
+        perm = await Notification.requestPermission();
+        if(perm!=='granted') return {ok:false, reason:'permesso negato'};
+      }
+      try{
+        const reg = await navigator.serviceWorker.ready;
+        const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+        if(!token) return {ok:false, reason:'token non ottenuto'};
+        const plat = (navigator.standalone || (matchMedia && matchMedia('(display-mode: standalone)').matches)) ? 'home' : 'browser';
+        await setDoc(doc(db,'tempo_tokens',token), { token, ua: navigator.userAgent.slice(0,180), platform:plat, updatedAt: Date.now(), lastSeen: Date.now() }, { merge:true });
+        return {ok:true, token};
+      }catch(e){ console.warn('refreshToken', e); return {ok:false, reason:'token non ottenuto'}; }
     };
+    window.fb.enableNotifications = ()=> window.fb.refreshToken(false);
 
     document.dispatchEvent(new Event('fb-ready'));   // avvia la sincronizzazione
   }catch(e){ console.warn('Firebase non inizializzato:', e); }
