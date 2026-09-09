@@ -33,14 +33,14 @@ async function getTokens() {
   return s.docs.map(d => d.id);
 }
 
-async function sendToAll(tokens, title, body) {
+async function sendToAll(tokens, title, body, link) {
   if (!tokens.length) return { successCount: 0 };
   const res = await fcm.sendEachForMulticast({
     tokens,
     notification: { title, body },
     webpush: {
       notification: { title, body, icon: '/tempo/icon-192.png', badge: '/tempo/icon-192.png' },
-      fcmOptions: { link: APP_URL }
+      fcmOptions: { link: link || APP_URL }
     }
   });
   // pulizia token non più validi
@@ -88,7 +88,7 @@ async function sendToAll(tokens, title, body) {
       const fireAt = t.dueAt - (OFF[k] || 0);
       if (fireAt > now) continue;                                  // non è ancora ora
       if (now - fireAt > 6 * 60 * 60 * 1000) { fired.push(k); changed = true; continue; }  // troppo vecchio: segno senza inviare
-      await sendToAll(tokens, 'TEMPO — promemoria', t.title || 'Hai un task da fare');
+      await sendToAll(tokens, 'TEMPO — promemoria', t.title || 'Hai un task da fare', APP_URL + '?task=' + encodeURIComponent(t.id || d.id));
       fired.push(k); changed = true;
       console.log('Alert inviato:', t.title, '(', k, ')');
     }
@@ -109,7 +109,7 @@ async function sendToAll(tokens, title, body) {
         if (t.deleted || t.done) continue;
         if (t.date && t.date < rn.date) continue;   // giorno già passato
         if (t.dailyLast === rn.date) continue;      // già avvisato oggi
-        await sendToAll(tokens, 'TEMPO — promemoria', t.title || 'Hai un task da fare');
+        await sendToAll(tokens, 'TEMPO — promemoria', t.title || 'Hai un task da fare', APP_URL + '?task=' + encodeURIComponent(t.id || d.id));
         await d.ref.update({ dailyLast: rn.date }).catch(() => {});
         console.log('Promemoria giornaliero:', t.title);
       }

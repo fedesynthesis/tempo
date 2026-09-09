@@ -91,6 +91,9 @@ main{padding:6px 18px calc(var(--nav-h) + 34px) 18px}
 
 /* ---------- Section header ---------- */
 .sec-h{display:flex;align-items:center;justify-content:space-between;margin:34px 6px 10px}
+.sec-h.tog{cursor:pointer;-webkit-user-select:none;user-select:none}
+.sec-h .chev{margin-left:8px;color:var(--txt3);font-size:15px;transition:transform .2s;display:inline-block}
+.sec-h .chev.up{transform:rotate(180deg)}
 .sec-h .cnt{font-size:12px;font-weight:700;color:var(--txt3);background:var(--surface2);border:1px solid var(--line);
   padding:2px 9px;border-radius:99px}
 
@@ -784,8 +787,9 @@ function renderToday(){
     </form>`;
 
   if(overdue.length){
-    h += secH('In ritardo', overdue.length);
-    h += `<div class="list">${openListHTML(overdue.sort(byDate))}</div>`;
+    const oOpen = !!state.overdueOpen;
+    h += `<div class="sec-h tog" data-act="toggle-overdue"><div class="eyebrow">In ritardo</div><div class="cnt">${overdue.length}</div><span class="chev${oOpen?' up':''}" aria-hidden="true">⌄</span></div>`;
+    if(oOpen) h += `<div class="list">${openListHTML(overdue.sort(byDate))}</div>`;
   }
 
   if(timed.length){
@@ -1520,6 +1524,7 @@ document.addEventListener('click',e=>{
 
   if(a==='nav'){ const v=el.dataset.view; if(v===state.view)return; const order=['today','tasks','cal','scritte']; const dir=order.indexOf(v)>order.indexOf(state.view)?1:-1; state.view=v; render(dir); return; }
   if(a==='today-jump'){ state.view='today'; state.calSel=todayStr(); render(); return; }
+  if(a==='toggle-overdue'){ state.overdueOpen=!state.overdueOpen; renderToday(); return; }
   if(a==='notif'){ notifEnable(); return; }
   if(a==='new'){ if(state.view==='scritte') openScritta(null); else openWizard(); return; }
   if(a==='new-on'){ openWizard({date:el.dataset.date}); return; }
@@ -1929,7 +1934,13 @@ async function notifEnable(){
 const _imp=tryImport();
 render();
 if(_imp) setTimeout(()=>toast(_imp+(_imp===1?' task importato':' task importati')),400);
-if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{})); }
+/* Apri la task giusta quando si tocca una notifica (link ?task=ID, anche ad app chiusa) */
+function apriTaskDaId(id){ if(!id) return; let n=0; const go=()=>{ const t=getTask(id); if(t){ openSheet(id); } else if(n++<40){ setTimeout(go,150); } }; go(); }
+(function apriDaNotifica(){ try{ const id=new URLSearchParams(location.search).get('task'); if(id){ apriTaskDaId(id); history.replaceState(null,'',location.pathname); } }catch(e){} })();
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+  navigator.serviceWorker.addEventListener('message', e=>{ if(e.data && e.data.type==='open-task' && e.data.id) apriTaskDaId(e.data.id); });
+}
 </script>
 
 <!-- ============ Firebase: notifiche push + digest mattutino ============ -->

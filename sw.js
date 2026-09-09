@@ -1,5 +1,5 @@
 /* TEMPO service worker — app offline + cache font/animazioni + notifiche push */
-const CACHE='tempo-v41';
+const CACHE='tempo-v42';
 const CORE=['./','./index.html','./manifest.json','./icon.svg','./icon-180.png','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(CACHE).then(c=>{
@@ -57,8 +57,9 @@ self.addEventListener('push',e=>{
 self.addEventListener('notificationclick',e=>{
   e.notification.close();
   const link = (e.notification.data && e.notification.data.link) || './';
+  let taskId=null; try{ taskId = new URL(link, self.location.origin).searchParams.get('task'); }catch(_){}
   e.waitUntil(clients.matchAll({type:'window',includeUncontrolled:true}).then(ws=>{
-    for(const w of ws){ if('focus' in w) return w.focus(); }
+    for(const w of ws){ if('focus' in w){ if(taskId){ try{ w.postMessage({type:'open-task', id:taskId}); }catch(_){} } return w.focus(); } }
     if(clients.openWindow) return clients.openWindow(link);
   }));
 });
