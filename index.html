@@ -1755,7 +1755,7 @@ function deleteTask(id){
   const idx=tasks.findIndex(x=>x.id===id); if(idx<0)return;
   const t=tasks[idx]; tasks.splice(idx,1); save(); reconcileRemove(id);
   if(pendingDel){ clearTimeout(pendingDel.timer); purge(pendingDel.task); }
-  pendingDel={task:t, timer:setTimeout(()=>{ purge(t); pendingDel=null; }, 6000)};
+  pendingDel={task:t, timer:setTimeout(()=>{ purge(t); pendingDel=null; }, 3500)};
   toast('Task eliminato', 'Annulla', ()=>{ tasks.splice(Math.min(idx,tasks.length),0,t); save(); reconcile(t); clearTimeout(pendingDel.timer); pendingDel=null; render(); });
 }
 function purge(t){ (t.attachments||[]).forEach(a=>fileDel(a.id)); }
@@ -1767,7 +1767,7 @@ function toast(msg, actLabel, cb){
   el.innerHTML = esc(msg) + (actLabel?` <button id="tact">${esc(actLabel)}</button>`:'');
   el.classList.add('on');
   if(actLabel&&cb){ $('#tact').onclick=()=>{ cb(); el.classList.remove('on'); }; }
-  clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove('on'), actLabel?6000:2400);
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove('on'), actLabel?3500:2400);
 }
 
 /* ============ SHEET DRAG (giù = chiudi) ============ */
