@@ -1,11 +1,12 @@
 /* RIFIUTI MAZZANO — promemoria serale (gira dentro il loop di send-reminders.js)
- * Alle 21:00 (ora italiana) manda "Stasera esponi: …" con i rifiuti ritirati DOMANI,
+ * Alle 20:30 (ora italiana) manda "Stasera esponi: …" con i rifiuti ritirati DOMANI,
  * in base alla zona (NORD/SUD) salvata da ogni telefono in `tempo_rifiuti_tokens`.
  * Regole = ecocalendario C.B.B.O. Mazzano 2026 (stesse di /rifiuti/index.html).
  * Dedup: tempo_meta/rifiuti.lastSent = data (una notifica al giorno).
  */
 const TZ = 'Europe/Rome';
-const SEND_HOUR = 21;
+const SEND_HOUR = 20;
+const SEND_MIN  = 30;               // 20:30: margine se il cron di GitHub ritarda
 const APP_URL = 'https://fedesynthesis.github.io/rifiuti/';
 const COL = 'tempo_rifiuti_tokens';
 
@@ -65,14 +66,14 @@ async function run(db, fcm){
   // Notifiche di prova richieste dall'app (campo testAt) — in qualunque momento
   for(const t of docs){
     if(t.testAt && !(t.testSentAt>=t.testAt)){
-      await send(db, fcm, [t.id], '♻️ Rifiuti — prova', 'Le notifiche funzionano. Ti avviso ogni sera alle 21 quando c’è da esporre qualcosa.');
+      await send(db, fcm, [t.id], '♻️ Rifiuti — prova', 'Le notifiche funzionano. Ti avviso ogni sera alle 20:30 quando c’è da esporre qualcosa.');
       await t.ref.update({ testSentAt: Date.now() }).catch(()=>{});
       console.log('Rifiuti: notifica di prova inviata');
     }
   }
 
   const rn = romeNow();
-  if(rn.hour < SEND_HOUR) return;
+  if(rn.hour < SEND_HOUR || (rn.hour === SEND_HOUR && rn.minute < SEND_MIN)) return;
   const metaRef = db.collection('tempo_meta').doc('rifiuti');
   const meta = (await metaRef.get()).data() || {};
   if(meta.lastSent === rn.date) return;
