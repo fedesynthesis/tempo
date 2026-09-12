@@ -56,6 +56,9 @@ async function sendToAll(tokens, title, body, link) {
 }
 
 (async () => {
+  // Promemoria RIFIUTI MAZZANO (app /rifiuti/): indipendente da TEMPO, non deve mai bloccarlo
+  try { await require('./rifiuti').run(db, fcm); } catch (e) { console.error('Rifiuti:', e.message || e); }
+
   const now = Date.now();
   const tokens = await getTokens();
   if (!tokens.length) { console.log('Nessun token registrato — niente da fare.'); return; }
