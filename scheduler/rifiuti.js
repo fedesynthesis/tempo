@@ -52,8 +52,12 @@ async function send(db, fcm, tokens, title, body){
   res.responses.forEach((r,i)=>{
     if(r.success) return;
     const c=(r.error&&r.error.code)||'';
-    if(c.includes('registration-token-not-registered')||c.includes('invalid-argument')||c.includes('mismatched-credential'))
+    // Cancello SOLO i token definitivamente morti. Su errori potenzialmente
+    // transitori (invalid-argument, mismatched-credential, quota, rete) NON cancello:
+    // meglio ritentare la sera dopo che perdere il telefono e restare senza avvisi.
+    if(c.includes('registration-token-not-registered')||c.includes('invalid-registration-token'))
       db.collection(COL).doc(tokens[i]).delete().catch(()=>{});
+    else if(c) console.warn('Rifiuti: invio non riuscito (token conservato):', c);
   });
   return res;
 }
