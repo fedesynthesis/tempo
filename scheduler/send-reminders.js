@@ -18,6 +18,8 @@ const TZ = 'Europe/Rome';          // fuso per il digest (gestisce anche l'ora l
 const DIGEST_HOUR = 6;             // 06:50
 const DIGEST_MIN  = 50;
 const APP_URL = 'https://fedesynthesis.github.io/tempo/';
+const INSIST_INTERVAL_MS = 3 * 60 * 1000;         // avviso di scadenza: ri-suona ogni 3 min…
+const INSIST_MAX_MS      = 2 * 60 * 60 * 1000;    // …finché non è fatto/letto, per max 2h dopo la scadenza
 
 function romeNow(d = new Date()) {
   const f = new Intl.DateTimeFormat('en-CA', {
@@ -33,13 +35,16 @@ async function getTokens() {
   return s.docs.map(d => d.id);
 }
 
-async function sendToAll(tokens, title, body, link) {
+async function sendToAll(tokens, title, body, link, opts) {
   if (!tokens.length) return { successCount: 0 };
+  opts = opts || {};
+  const wn = { title, body, icon: '/tempo/icon-192.png', badge: '/tempo/icon-192.png' };
+  if (opts.tag) { wn.tag = opts.tag; wn.renotify = true; }   // renotify → ri-suona a ogni ripetizione (stesso tag)
   const res = await fcm.sendEachForMulticast({
     tokens,
     notification: { title, body },
     webpush: {
-      notification: { title, body, icon: '/tempo/icon-192.png', badge: '/tempo/icon-192.png' },
+      notification: wn,
       fcmOptions: { link: link || APP_URL }
     }
   });
@@ -78,24 +83,43 @@ async function sendToAll(tokens, title, body, link) {
   for (const d of dueSnap.docs) {
     const t = d.data();
     if (t.deleted || t.done || t.dueAt == null) continue;
-    const keys = remindsOf(t).filter(k => k !== 'daily' && k !== 'none');
-    if (!keys.length) continue;
+    const id = t.id || d.id;
+    const link = APP_URL + '?task=' + encodeURIComponent(id);
+    const allKeys = remindsOf(t).filter(k => k !== 'daily' && k !== 'none');
+    const preKeys = allKeys.filter(k => k !== 'at');   // pre-avvisi: una sola volta
+    const hasAt   = allKeys.includes('at');            // avviso all'ora di scadenza: INSISTENTE
+
+    // 1a) pre-avvisi (1h/2h/1d/2d): una sola volta, tracciati in remindedKeys
     let fired = Array.isArray(t.remindedKeys) ? t.remindedKeys.slice() : [];
-    // migrazione dal vecchio `remindedAt` (avviso singolo già mandato): segno come già fatti gli offset scaduti allora
     if (!Array.isArray(t.remindedKeys) && t.remindedAt != null) {
-      for (const k of keys) if (t.dueAt - (OFF[k] || 0) <= t.remindedAt) fired.push(k);
+      for (const k of preKeys) if (t.dueAt - (OFF[k] || 0) <= t.remindedAt) fired.push(k);
     }
     let changed = false;
-    for (const k of keys) {
+    for (const k of preKeys) {
       if (fired.includes(k)) continue;
       const fireAt = t.dueAt - (OFF[k] || 0);
       if (fireAt > now) continue;                                  // non è ancora ora
       if (now - fireAt > 6 * 60 * 60 * 1000) { fired.push(k); changed = true; continue; }  // troppo vecchio: segno senza inviare
-      await sendToAll(tokens, 'TEMPO — promemoria', t.title || 'Hai un task da fare', APP_URL + '?task=' + encodeURIComponent(t.id || d.id));
+      await sendToAll(tokens, 'TEMPO — promemoria', t.title || 'Hai un task da fare', link, { tag: 'task-' + id });
       fired.push(k); changed = true;
-      console.log('Alert inviato:', t.title, '(', k, ')');
+      console.log('Pre-avviso:', t.title, '(', k, ')');
     }
     if (changed) await d.ref.update({ remindedKeys: fired }).catch(() => {});
+
+    // 1b) avviso all'ora di scadenza: ri-suona ogni INSIST_INTERVAL finché non è fatto o letto (aperto)
+    if (hasAt) {
+      const seen  = t.seenAt && t.seenAt >= t.dueAt;               // aperto/letto dopo la scadenza
+      const delay = now - t.dueAt;                                 // da quanto è scaduto
+      if (!seen && delay >= 0 && delay <= INSIST_MAX_MS) {
+        if (now - (t.insistLast || 0) >= INSIST_INTERVAL_MS) {
+          const n = (t.insistCount || 0) + 1;
+          const body = (t.title || 'Task da fare') + ' — spunta o apri per fermare l’avviso';
+          await sendToAll(tokens, '⏰ TEMPO — da fare ora', body, link, { tag: 'task-' + id });
+          await d.ref.update({ insistLast: now, insistCount: n }).catch(() => {});
+          console.log('Insisto:', t.title, 'x' + n);
+        }
+      }
+    }
   }
 
   // 1b) PROMEMORIA "ogni giorno": una volta al giorno (dall'ora del digest) finché il giorno del task non è passato.

@@ -1298,7 +1298,11 @@ let sheetNew=false;
 
 function openSheet(id){
   let t;
-  if(id){ t=getTask(id); sheetNew=false; }
+  if(id){ t=getTask(id); sheetNew=false;
+    // aprire una task GIÀ SCADUTA = "letta": ferma l'avviso insistente dello scheduler
+    if(t && !t.done){ const endT=t.timeEnd||t.time; const dueAt=(t.date&&endT)?new Date(t.date+'T'+endT).getTime():null;
+      if(dueAt && dueAt<=Date.now() && !(t.seenAt>=dueAt)){ t.seenAt=Date.now(); touch(t); reconcile(t); } }
+  }
   else { t={id:uid(),title:'',notes:'',done:false,date:null,time:null,priority:null,list:'',phone:'',subtasks:[],attachments:[],createdAt:Date.now(),updatedAt:Date.now()}; tasks.unshift(t); sheetNew=true; }
   state.editId=t.id;
   renderSheet();
@@ -2008,7 +2012,7 @@ if(configured){
           order:(typeof t.order==='number'?t.order:null),
           catId:t.catId||null, subId:t.subId||null, phone:t.phone||'',
           subtasks:(t.subtasks||[]), attachments:(t.attachments||[]).map(a=>({id:a.id,name:a.name||'',type:a.type||'',size:a.size||0})),
-          dueAt, remindedAt, createdAt:t.createdAt||Date.now(), updatedAt:Number(t.updatedAt)||Date.now()
+          dueAt, remindedAt, seenAt:(Number(t.seenAt)||null), createdAt:t.createdAt||Date.now(), updatedAt:Number(t.updatedAt)||Date.now()
         });
       }catch(e){ console.warn('syncTask', e); }
     };
