@@ -257,6 +257,8 @@ input[type=date].inp,input[type=time].inp{-webkit-appearance:none;appearance:non
 .winchk.on .winbox{background:var(--accent);border-color:var(--accent)}
 .winchk .winbox svg{width:12px;height:12px;stroke:#fff;fill:none;stroke-width:3.2}
 .remopts{display:flex;flex-direction:column;gap:8px;margin-top:2px}
+.alarmbtn{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;padding:12px;border:1.5px solid var(--accent);border-radius:12px;text-align:center;font:600 14px Inter;color:var(--accent);text-decoration:none}
+.alarmbtn small{font-weight:500;color:var(--txt3)}
 .remgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .remopts .chip{white-space:normal}
 .priopts{display:flex;gap:8px}
@@ -1351,7 +1353,9 @@ function renderSheet(){
       </div></div>`;
 
   h += `<div class="field"><div class="lbl">${svg('bell')} Avviso <span style="font-weight:500;color:var(--txt3);text-transform:none;letter-spacing:0">· puoi sceglierne più di uno</span></div>
-      <div class="remopts">${remBtns(remindsSel(t), 'rem')}</div></div>`;
+      <div class="remopts">${remBtns(remindsSel(t), 'rem')}</div>`
+      + ((t.time||t.timeEnd) ? `<a class="alarmbtn" href="shortcuts://run-shortcut?name=TEMPO%20Sveglia&input=text&text=${encodeURIComponent(t.timeEnd||t.time)}">⏰ Crea sveglia iPhone<small>suona anche in silenzioso</small></a>` : '')
+      + `</div>`;
 
   h += `<div class="field"><div class="lbl">${svg('phone')} Telefono</div>
       <div class="dtwrap">${svg('phone')}<input type="tel" inputmode="tel" placeholder="Numero — o scegli dalla rubrica" value="${esc(t.phone)}" data-field="phone"></div>
