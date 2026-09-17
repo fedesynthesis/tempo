@@ -57,6 +57,7 @@ h2{font-size:18px;font-weight:800;letter-spacing:-.01em}
   padding:14px 18px;padding-top:max(14px,env(safe-area-inset-top));
   background:linear-gradient(var(--bg) 72%,rgba(246,246,243,0));backdrop-filter:blur(8px)}
 .brand{display:flex;align-items:center;gap:10px}
+.appver{font:600 10px Inter;color:var(--txt3);opacity:.7;align-self:flex-end;margin:0 0 3px 1px}
 .logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--accent-hi),var(--accent-deep));
   display:grid;place-items:center;box-shadow:0 6px 16px -4px rgba(255,90,60,.5);flex:none}
 .logo svg{width:19px;height:19px;stroke:#fff;fill:none;stroke-width:2.4}
@@ -498,6 +499,7 @@ body.embed .toast{left:calc(50% - var(--railw)/2);bottom:calc(26px + env(safe-ar
     <div class="brand">
       <div class="logo"><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-11" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
       <b>TEM<span>PO</span></b>
+      <span class="appver" id="appver"></span>
     </div>
     <div style="display:flex;gap:8px">
       <button class="iconbtn" data-act="notif" aria-label="Attiva notifiche">
@@ -1354,7 +1356,7 @@ function renderSheet(){
 
   h += `<div class="field"><div class="lbl">${svg('bell')} Avviso <span style="font-weight:500;color:var(--txt3);text-transform:none;letter-spacing:0">· puoi sceglierne più di uno</span></div>
       <div class="remopts">${remBtns(remindsSel(t), 'rem')}</div>`
-      + ((t.time||t.timeEnd) ? `<a class="alarmbtn" href="shortcuts://run-shortcut?name=TEMPO%20Sveglia&input=text&text=${encodeURIComponent(t.timeEnd||t.time)}">⏰ Crea sveglia iPhone<small>suona anche in silenzioso</small></a>` : '')
+      + ((t.time||t.timeEnd) ? `<button type="button" class="alarmbtn" data-act="alarm">⏰ Crea sveglia iPhone<small>suona anche in silenzioso</small></button>` : '')
       + `</div>`;
 
   h += `<div class="field"><div class="lbl">${svg('phone')} Telefono</div>
@@ -1534,6 +1536,14 @@ document.addEventListener('click',e=>{
   if(a==='today-jump'){ state.view='today'; state.calSel=todayStr(); render(); return; }
   if(a==='toggle-overdue'){ state.overdueOpen=!state.overdueOpen; renderToday(); return; }
   if(a==='notif'){ notifEnable(); return; }
+  if(a==='alarm'){   // crea sveglia Orologio via Comando rapido, leggendo l'ORA ATTUALE dagli input del foglio
+    const te=sheetBody.querySelector('input[data-field="timeEnd"]');
+    const tt=sheetBody.querySelector('input[data-field="time"]');
+    const time=((te&&te.value)||(tt&&tt.value)||'').trim();
+    if(!time){ toast('Metti prima un orario alla task'); return; }
+    location.href='shortcuts://run-shortcut?name=TEMPO%20Sveglia&input=text&text='+encodeURIComponent(time);
+    return;
+  }
   if(a==='new'){ if(state.view==='scritte') openScritta(null); else openWizard(); return; }
   if(a==='new-on'){ openWizard({date:el.dataset.date}); return; }
   if(a==='scr-open'){ openScritta(el.dataset.id); return; }
@@ -1949,6 +1959,11 @@ if('serviceWorker' in navigator){
   window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
   navigator.serviceWorker.addEventListener('message', e=>{ if(e.data && e.data.type==='open-task' && e.data.id) apriTaskDaId(e.data.id); });
 }
+// versione visibile in header, letta dal nome cache attivo del SW (automatica a ogni bump)
+(function(){ const el=document.getElementById('appver'); if(!el||!('caches' in window)) return;
+  const show=()=>caches.keys().then(ks=>{ const v=(ks.find(k=>/^tempo-/.test(k))||'').replace('tempo-',''); if(v) el.textContent=v; });
+  show(); if(navigator.serviceWorker){ navigator.serviceWorker.addEventListener('controllerchange', show); }
+})();
 </script>
 
 <!-- ============ Firebase: notifiche push + digest mattutino ============ -->
