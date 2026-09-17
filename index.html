@@ -242,7 +242,7 @@ main{padding:6px 18px calc(var(--nav-h) + 34px) 18px}
 .sheet .stitle::placeholder{color:var(--txt3)}
 .field{margin-top:14px}
 .field .lbl{font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--txt3);margin:0 2px 8px;display:flex;align-items:center;gap:6px}
-.field .lbl svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
+.field .lbl svg,.wizbody .lbl svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
 .inp{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-s);padding:12px 13px;
   outline:none;font-weight:500;box-shadow:var(--sh)}
 textarea.inp{resize:none;min-height:82px;line-height:1.5}
@@ -1509,7 +1509,8 @@ function renderWiz(){
     h += `<button class="winchk ${hasWin?'on':''}" data-act="wiz-win-toggle" type="button"><span class="winbox">${hasWin?svg('check'):''}</span><span>Finestra oraria (es. 9–18)</span></button>`;
   } else if(step.k==='prio'){
     h += `<div class="priopts">${wizPrio('none',null,t)}${wizPrio('low','low',t)}${wizPrio('med','med',t)}${wizPrio('high','high',t)}</div>`;
-    h += `<div class="lbl" style="margin:20px 2px 10px">${svg('bell')} Avviso <span style="font-weight:500;color:var(--txt3);text-transform:none;letter-spacing:0">· puoi sceglierne più di uno</span></div><div class="remopts">${remBtns(remindsSel(t), 'wiz-rem')}</div>`;
+    h += `<div class="lbl" style="margin:20px 2px 10px">${svg('bell')} Avviso <span style="font-weight:500;color:var(--txt3);text-transform:none;letter-spacing:0">· puoi sceglierne più di uno</span></div><div class="remopts">${remBtns(remindsSel(t), 'wiz-rem')}</div>`
+      + ((t.time||t.timeEnd) ? `<button type="button" class="alarmbtn" data-act="alarm">⏰ Crea sveglia iPhone<small>suona anche in silenzioso</small></button>` : '');
   } else if(step.k==='file'){
     h += `<div id="wizatts"></div>`;
   }
@@ -1536,10 +1537,15 @@ document.addEventListener('click',e=>{
   if(a==='today-jump'){ state.view='today'; state.calSel=todayStr(); render(); return; }
   if(a==='toggle-overdue'){ state.overdueOpen=!state.overdueOpen; renderToday(); return; }
   if(a==='notif'){ notifEnable(); return; }
-  if(a==='alarm'){   // crea sveglia Orologio via Comando rapido, leggendo l'ORA ATTUALE dagli input del foglio
-    const te=sheetBody.querySelector('input[data-field="timeEnd"]');
-    const tt=sheetBody.querySelector('input[data-field="time"]');
-    const time=((te&&te.value)||(tt&&tt.value)||'').trim();
+  if(a==='alarm'){   // crea sveglia Orologio via Comando rapido, con l'ORA ATTUALE
+    let time='';
+    if(el.closest('#wizbody')){          // procedura guidata: l'orario sta in wizTask (input in un altro step)
+      time=String((wizTask&&(wizTask.timeEnd||wizTask.time))||'').trim();
+    } else {                              // dettaglio task: leggo dal vivo gli input del foglio
+      const te=sheetBody.querySelector('input[data-field="timeEnd"]');
+      const tt=sheetBody.querySelector('input[data-field="time"]');
+      time=((te&&te.value)||(tt&&tt.value)||'').trim();
+    }
     if(!time){ toast('Metti prima un orario alla task'); return; }
     location.href='shortcuts://run-shortcut?name=TEMPO%20Sveglia&input=text&text='+encodeURIComponent(time);
     return;
