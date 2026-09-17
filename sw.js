@@ -1,5 +1,5 @@
 /* TEMPO service worker — app offline + cache font/animazioni + notifiche push */
-const CACHE='tempo-v44';
+const CACHE='tempo-v45';
 const CORE=['./','./index.html','./manifest.json','./icon.svg','./icon-180.png','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(CACHE).then(c=>{
@@ -51,6 +51,8 @@ self.addEventListener('push',e=>{
     tag: n.tag || undefined,
     renotify: !!n.tag,                 // stesso tag → ri-suona/vibra ad ogni ripetizione (avviso insistente)
     requireInteraction: !!n.tag,       // resta a schermo finché non la tocchi (dove supportato)
+    silent:false,                      // esplicito: notifica sonora (usa il suono di sistema)
+    sound:'default',                   // ignorato su iOS ma innocuo altrove
     data: { link: (d.fcmOptions&&d.fcmOptions.link) || (n.click_action) || './' },
     vibrate:[100,50,100,50,100]
   };

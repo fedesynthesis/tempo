@@ -44,6 +44,7 @@ async function sendToAll(tokens, title, body, link, opts) {
     tokens,
     notification: { title, body },
     webpush: {
+      headers: { Urgency: 'high' },              // consegna immediata + notifica "alerting" (suono)
       notification: wn,
       fcmOptions: { link: link || APP_URL }
     }
